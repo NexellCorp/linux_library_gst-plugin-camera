@@ -38,6 +38,8 @@
 #include <gst/video/video-info.h>
 #include <glib-object.h>
 
+#include <mm_types.h>
+
 #include "media-bus-format.h"
 
 #include "nx-v4l2.h"
@@ -763,12 +765,66 @@ static GstCameraBuffer *_camerasrc_buffer_new(GstCameraSrc *camerasrc)
 
 static void gst_camerasrc_buffer_finalize(GstCameraBuffer *buffer);
 
+static GstMemory *_get_zero_copy_data(GstCameraSrc *camerasrc, guint32 index)
+{
+	GstMemory *meta = NULL;
+	MMVideoBuffer *mm_buf = NULL;
+
+	mm_buf = (MMVideoBuffer *)malloc(sizeof(*mm_buf));
+	if (!mm_buf) {
+		GST_ERROR_OBJECT(camerasrc, "failed to alloc MMVideoBuffer");
+		return NULL;
+	}
+
+	memset(mm_buf, 0, sizeof(*mm_buf));
+
+#ifdef USE_NATIVE_DRM_BUFFER
+	mm_buf->type = MM_VIDEO_BUFFER_TYPE_GEM;
+	mm_buf->data[0] = camerasrc->vaddrs[index];
+	/* mm_buf->handle.gem[0] = camerasrc->gem_fds[index]; */
+	if (camerasrc->flinks[index] < 0) {
+		camerasrc->flinks[index] = get_flink_name(camerasrc->drm_fd,
+							  camerasrc->gem_fds[index]);
+	}
+	mm_buf->handle.gem[0] = camerasrc->flinks[index];
+	mm_buf->handle_num = 1;
+	mm_buf->buffer_index = index;
+#else
+	/* TODO: TIZEN */
+	mm_buf->type = MM_VIDEO_BUFFER_TYPE_TBM_BO;
+#endif
+
+	mm_buf->width[0] = camerasrc->width;
+	mm_buf->height[0] = camerasrc->height;
+	mm_buf->size[0] = camerasrc->buffer_size;
+	/* FIXME: currently test only YUV420 format */
+	mm_buf->plane_num = 3;
+	mm_buf->format = MM_PIXEL_FORMAT_I420;
+	mm_buf->stride_width[0] = GST_ROUND_UP_32(camerasrc->width);
+	mm_buf->stride_width[1] = GST_ROUND_UP_16(mm_buf->stride_width[0] >> 1);
+	mm_buf->stride_width[2] = mm_buf->stride_width[1];
+	mm_buf->stride_height[0] = GST_ROUND_UP_16(camerasrc->height);
+	mm_buf->stride_height[1] = GST_ROUND_UP_16(camerasrc->height >> 1);
+	mm_buf->stride_height[2] = mm_buf->stride_height[1];
+
+	meta = gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY,
+				      mm_buf,
+				      sizeof(MMVideoBuffer),
+				      0,
+				      sizeof(MMVideoBuffer),
+				      mm_buf,
+				      free);
+
+	return meta;
+}
+
 static GstFlowReturn _read_preview(GstCameraSrc *camerasrc, GstBuffer **buffer)
 {
 	int ret;
 	int v4l2_buffer_index;
 	GstCameraBuffer *vid_buf = NULL;
 	GstMemory *mem_camerabuf = NULL;
+	GstMemory *mem_zerocopy_data = NULL;
 
 	GST_DEBUG_OBJECT(camerasrc, "camerasrc dequeue buffer");
 	ret = nx_v4l2_dqbuf(camerasrc->clipper_video_fd, nx_clipper_video, 1,
@@ -781,6 +837,12 @@ static GstFlowReturn _read_preview(GstCameraSrc *camerasrc, GstBuffer **buffer)
 	vid_buf = _camerasrc_buffer_new(camerasrc);
 	vid_buf->v4l2_buffer_index = v4l2_buffer_index;
 	_get_timeinfo(camerasrc, vid_buf->buffer);
+
+	mem_zerocopy_data = _get_zero_copy_data(camerasrc, v4l2_buffer_index);
+	if (!mem_zerocopy_data)
+		GST_ERROR_OBJECT(camerasrc, "failed to get zero copy data");
+	else
+		gst_buffer_append_memory(vid_buf->buffer, mem_zerocopy_data);
 
 	mem_camerabuf = gst_memory_new_wrapped(GST_MEMORY_FLAG_NOT_MAPPABLE,
 					       vid_buf,
@@ -1383,6 +1445,7 @@ static void gst_camerasrc_init(GstCameraSrc *camerasrc)
 	for (i = 0; i < MAX_BUFFER_COUNT; i++) {
 		camerasrc->gem_fds[i] = -1;
 		camerasrc->dma_fds[i] = -1;
+		camerasrc->flinks[i] = -1;
 	}
 #else
 	camerasrc->bufmgr = NULL;

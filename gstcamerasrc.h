@@ -117,6 +117,7 @@ struct _GstCameraSrc {
 #ifdef USE_NATIVE_DRM_BUFFER
 	int drm_fd;
 	int gem_fds[MAX_BUFFER_COUNT];
+	int flinks[MAX_BUFFER_COUNT];
 	int dma_fds[MAX_BUFFER_COUNT];
 	void *vaddrs[MAX_BUFFER_COUNT];
 #else
