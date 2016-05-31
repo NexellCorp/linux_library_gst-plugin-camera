@@ -3,20 +3,22 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 AM_CFLAGS = \
 	$(WARN_CFLAGS) \
 	-I${includedir} \
+	-I${includedir}/${GST_PLUGIN_PATH} \
 	-I./ \
 	-I${EXTRAPATH_INCLUDE} \
 	-I${EXTRAPATH}/lib/glib-2.0/include \
 	-I${EXTRAPATH_INCLUDE}/glib-2.0 \
-	-I${EXTRAPATH_INCLUDE}/gstreamer-1.0
+	-I${EXTRAPATH_INCLUDE}/gstreamer-${GST_API_VERSION}
 
 libgstnxcamerasrc_la_LTLIBRARIES = libgstnxcamerasrc.la
-libgstnxcamerasrc_ladir = ${libdir}
-libgstnxcamerasrc_la_LDFLAGS = -L${libdir} -L${EXTRAPATH_LIB} 
-libgstnxcamerasrc_la_LIBADD = -lnx_drm_allocator -lnx_v4l2 -lgstallocators-1.0 -lgstbase-1.0 -lgmodule-2.0 -lgobject-2.0 -lglib-2.0
+libgstnxcamerasrc_ladir = ${libdir}/${GST_PLUGIN_PATH}
+libgstnxcamerasrc_la_LDFLAGS = -L${libdir} -L${libdir}/${GST_PLUGIN_PATH} -L${EXTRAPATH_LIB} 
+libgstnxcamerasrc_la_LIBADD = -lgstallocators-1.0 -lgstbase-1.0 -lgmodule-2.0 -lgobject-2.0 -lglib-2.0
+libgstnxcamerasrc_la_LIBADD += -lnx_drm_allocator -lnx_v4l2
 libgstnxcamerasrc_la_SOURCES = \
 	gstcamerasrc.c
 
-gstnxcamerasrcincludedir = ${includedir}
+gstnxcamerasrcincludedir = ${includedir}/${GST_PLUGIN_PATH}
 gstnxcamerasrcinclude_HEADERS = \
 	gstcamerasrc.h
 

@@ -48,8 +48,8 @@ make install DESTDIR=%{buildroot}
 find %{buildroot} -type f -name "*.la" -delete
 
 %files
-%{_libdir}/libgstnxcamerasrc.so
-%{_libdir}/libgstnxcamerasrc.so.*
+%{_libdir}/gstreamer-1.0/libgstnxcamerasrc.so
+%{_libdir}/gstreamer-1.0/libgstnxcamerasrc.so.*
 
 %files devel
-%{_includedir}/gstcamerasrc.h
+%{_includedir}/gstreamer-1.0/gstcamerasrc.h

@@ -341,13 +341,13 @@ static gboolean _create_buffer(GstCameraSrc *camerasrc)
 					 "failed to gem to dma %d", i);
 			return FALSE;
 		}
-
+		
 		if (get_vaddr(drm_fd, gem_fd, camerasrc->buffer_size, &vaddr)) {
 			GST_ERROR_OBJECT(camerasrc,
 					 "failed to get_vaddr %d", i);
 			return FALSE;
 		}
-
+		
 		camerasrc->gem_fds[i] = gem_fd;
 		camerasrc->dma_fds[i] = dma_fd;
 		camerasrc->vaddrs[i] = vaddr;
@@ -739,7 +739,7 @@ static gboolean _get_timeinfo(GstCameraSrc *camerasrc, GstBuffer *buffer)
 
 		if (camerasrc->fps > 0)
 			duration = gst_util_uint64_scale_int(GST_SECOND, 1,
-							     camerasrc->fps); 
+							     camerasrc->fps);
 		else
 			duration = gst_util_uint64_scale_int(GST_SECOND, 1, 30);
 	}
@@ -1030,7 +1030,7 @@ static gboolean gst_camerasrc_start(GstBaseSrc *src)
 
 	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
 
-#ifndef FOLLOWING_SAMSUNG_SCHEME 
+#ifndef FOLLOWING_SAMSUNG_SCHEME
 	return _camera_start(camerasrc);
 #else
 	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
