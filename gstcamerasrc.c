@@ -341,13 +341,13 @@ static gboolean _create_buffer(GstCameraSrc *camerasrc)
 					 "failed to gem to dma %d", i);
 			return FALSE;
 		}
-		
+		#if 0	
 		if (get_vaddr(drm_fd, gem_fd, camerasrc->buffer_size, &vaddr)) {
 			GST_ERROR_OBJECT(camerasrc,
 					 "failed to get_vaddr %d", i);
 			return FALSE;
 		}
-		
+		#endif
 		camerasrc->gem_fds[i] = gem_fd;
 		camerasrc->dma_fds[i] = dma_fd;
 		camerasrc->vaddrs[i] = vaddr;
