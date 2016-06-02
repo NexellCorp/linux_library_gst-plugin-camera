@@ -118,10 +118,10 @@ static GstStaticPadTemplate src_factory =
 	GST_STATIC_PAD_TEMPLATE("src",
 				GST_PAD_SRC,
 				GST_PAD_ALWAYS,
-				/* GST_STATIC_CAPS("video/x-raw," */
-				/* 		"format = (string { I420 }, " */
-				/* 		"width = (int) [ 1, 4096 ], " */
-				/* 		"height = (int) [ 1, 4096 ]; " */
+				GST_STATIC_CAPS("video/x-raw, "
+				 		"format = (string) { I420 }, "
+				 		"width = (int) [ 1, 4096 ], "
+				 		"height = (int) [ 1, 4096 ]; ")
 				/* 		"video/x-raw," */
 				/* 		"format = (string { YV12 }, " */
 				/* 		"width = (int) [ 1, 4096 ], " */
@@ -134,9 +134,9 @@ static GstStaticPadTemplate src_factory =
 				/* 		"format = (string { NV21 }, " */
 				/* 		"width = (int) [ 1, 4096 ], " */
 				/* 		"height = (int) [ 1, 4096 ]; ") */
-				GST_STATIC_CAPS(
-						 "video/x-raw"
-						)
+				//GST_STATIC_CAPS(
+				//		 "video/x-raw"
+				//		)
 				);
 
 /* util function */
@@ -213,6 +213,7 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 {
 	gint w;
 	gint h;
+	gint buffer_type;
 	gint fps_n;
 	gint fps_d;
 	gchar *caps_string;
@@ -236,24 +237,30 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 		GST_ERROR_OBJECT(camerasrc, "failed to get width from structure(%p)", s);
 		/* return FALSE; */
 		w = camerasrc->width;
-
+		gst_structure_set(s, "width", G_TYPE_INT, w, NULL);
 	}
 
 	if (!gst_structure_get_int(s, "height", &h)) {
 		GST_ERROR_OBJECT(camerasrc, "failed to get height from structure(%p)", s);
 		/* return FALSE; */
 		h = camerasrc->height;
+		gst_structure_set(s, "height", G_TYPE_INT, h, NULL);
+	}
+
+	if (!gst_structure_get_int(s, "buffer-type", &buffer_type)) {
+		GST_ERROR_OBJECT(camerasrc, "failed to get buffer_type from structure(%p)", s);
+		/* return FALSE; */
+		buffer_type = MM_VIDEO_BUFFER_TYPE_GEM;
+		gst_structure_set(s, "buffer-type", G_TYPE_INT, MM_VIDEO_BUFFER_TYPE_GEM, NULL);
 	}
 
 	if (w == 1)
-		w = DEF_CAPTURE_WIDTH;
+		gst_structure_set(s, "width", G_TYPE_INT, camerasrc->width, NULL);
 
 	if (h == 1)
-		h = DEF_CAPTURE_HEIGHT;
-
-	camerasrc->width = w;
-	camerasrc->height = h;
-
+		gst_structure_set(s, "height", G_TYPE_INT, camerasrc->height, NULL);
+	if (buffer_type != MM_VIDEO_BUFFER_TYPE_GEM)
+		gst_structure_set(s, "buffer-type", G_TYPE_INT, MM_VIDEO_BUFFER_TYPE_GEM, NULL);
 	framerate = gst_structure_get_value(s, "framerate");
 	if (!framerate) {
 		GST_INFO("Set FPS as default(30)");
@@ -294,6 +301,7 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 			return ret;
 		}
 		camerasrc->pixel_format = pixel_format;
+		gst_structure_set(s, "format", G_TYPE_STRING, caps_format_name, NULL);
 	} else {
 		GST_ERROR_OBJECT(camerasrc, "Unsupported mime type: %s",
 				 mime_type);
@@ -647,7 +655,6 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 		GST_ERROR_OBJECT(camerasrc, "failed to create buffer");
 		return FALSE;
 	}
-
 	return _start_preview(camerasrc);
 }
 
@@ -1379,16 +1386,13 @@ static void gst_camerasrc_class_init(GstCameraSrcClass *klass)
 							     0,
 							     G_PARAM_READWRITE |
 							     G_PARAM_STATIC_STRINGS));
-
 	/* element_class overriding */
 	gst_element_class_add_pad_template(element_class,
 				gst_static_pad_template_get(&src_factory));
 	gst_element_class_set_static_metadata(element_class,
 					      "Nexell Camera Source GStreamer Plug-in",
 					      "Source/Video",
-					      "camera src for videosrc based GStreamer Plug-in",
-					      "Sungwoo Park <swpark@nexell.co.kr>");
-	
+					      "camera src for videosrc based GStreamer Plug-in",					      "Sungwoo Park <swpark@nexell.co.kr>");
 	/* basesrc_class overriding */
 	basesrc_class->start = gst_camerasrc_start;
 	basesrc_class->stop = gst_camerasrc_stop;
