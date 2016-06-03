@@ -21,15 +21,6 @@ Requires(postun): /sbin/ldconfig
 %description
 gstreamer plugin camera
 
-%package devel
-Summary: gstreamer plugin camera
-Group: Development/Libraries
-License: Apache 2.0
-Requires: %{name} = %{version}-%{release}
-
-%description devel
-gstreamer plugin camera (devel)
-
 %prep
 %setup -q
 
@@ -50,6 +41,3 @@ find %{buildroot} -type f -name "*.la" -delete
 %files
 %{_libdir}/gstreamer-1.0/libgstnxcamerasrc.so
 %{_libdir}/gstreamer-1.0/libgstnxcamerasrc.so.*
-
-%files devel
-%{_includedir}/gstreamer-1.0/gstcamerasrc.h

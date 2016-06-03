@@ -17,8 +17,6 @@ libgstnxcamerasrc_la_LIBADD += -lnx_drm_allocator -lnx_v4l2
 libgstnxcamerasrc_la_SOURCES = \
 	gstcamerasrc.c
 
-gstnxcamerasrcincludedir = ${includedir}/${GST_PLUGIN_PATH}
-gstnxcamerasrcinclude_HEADERS = \
-	gstcamerasrc.h
-
+gstnxcamerasrcincludedir = ${includedir}
+gstnxcamerasrcinclude_HEADERS = 
 
