@@ -254,10 +254,10 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 		gst_structure_set(s, "buffer-type", G_TYPE_INT, MM_VIDEO_BUFFER_TYPE_GEM, NULL);
 	}
 
-	if (w == 1)
+	if (w != camerasrc->width)
 		gst_structure_set(s, "width", G_TYPE_INT, camerasrc->width, NULL);
 
-	if (h == 1)
+	if (h != camerasrc->height)
 		gst_structure_set(s, "height", G_TYPE_INT, camerasrc->height, NULL);
 	if (buffer_type != MM_VIDEO_BUFFER_TYPE_GEM)
 		gst_structure_set(s, "buffer-type", G_TYPE_INT, MM_VIDEO_BUFFER_TYPE_GEM, NULL);
@@ -282,9 +282,12 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 		}
 	}
 	camerasrc->fps = (guint)((float)fps_n / (float)fps_d);
-
+	if (camerasrc->fps != DEF_FPS)
+		camerasrc->fps = DEF_FPS;
+	gst_structure_set(s, "framerate", GST_TYPE_FRACTION, DEF_FPS, 1, NULL);
 	mime_type = gst_structure_get_name(s);
 	*size = 0;
+	#if 0
 	if (!strcmp(mime_type, "video/x-raw")) {
 		caps_format_name = gst_structure_get_string(s, "format");
 		if (caps_format_name == NULL) {
@@ -307,6 +310,12 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 				 mime_type);
 		return FALSE;
 	}
+	#else
+	if (strcmp(mime_type, "video/x-raw")) {
+		GST_ERROR_OBJECT(camerasrc, "Unsupported mime type: %s", mime_type);
+		return FALSE;
+	}
+	#endif
 
 OUT:
 	/* for debugging */
