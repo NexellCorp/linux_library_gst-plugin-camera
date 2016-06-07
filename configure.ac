@@ -60,7 +60,7 @@ LT_INIT([disable-static])
 AC_CHECK_HEADER_STDBOOL
 
 # Checks for library functions.
-AC_FUNC_MALLOC
+#AC_FUNC_MALLOC
 AC_CHECK_FUNCS([memset])
 
 AC_CONFIG_FILES([Makefile])
