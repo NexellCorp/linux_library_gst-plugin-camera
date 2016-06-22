@@ -7,7 +7,8 @@ AM_CFLAGS = \
 	-I${EXTRAPATH_INCLUDE} \
 	-I${EXTRAPATH}/lib/glib-2.0/include \
 	-I${EXTRAPATH_INCLUDE}/glib-2.0 \
-	-I${EXTRAPATH_INCLUDE}/gstreamer-${GST_API_VERSION}
+	-I${EXTRAPATH_INCLUDE}/gstreamer-${GST_API_VERSION} \
+	-I${libdir}/gstreamer-${GST_API_VERSION}/include
 
 libgstnxcamerasrc_la_LTLIBRARIES = libgstnxcamerasrc.la
 libgstnxcamerasrc_ladir = ${libdir}/${GST_PLUGIN_PATH}
