@@ -11,7 +11,6 @@ BuildRequires:  pkgconfig(glib-2.0)
 BuildRequires:	gstreamer1-devel
 BuildRequires:	glibc-devel
 BuildRequires:	gstreamer1-plugins-base-devel
-BuildRequires:	gst-plugins-renderer-devel
 BuildRequires:	nx-drm-allocator-devel
 BuildRequires:	nx-v4l2-devel
 
