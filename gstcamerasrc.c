@@ -29,6 +29,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 
 #include <linux/videodev2.h>
 
@@ -78,7 +79,16 @@ enum {
 	ARG_VFLIP,
 	ARG_HFLIP,
 
+	/* buffer type */
+	ARG_BUFFER_TYPE,
+
 	ARG_NUM,
+};
+
+/* buffer type */
+enum {
+	BUFFER_TYPE_NORMAL,
+	BUFFER_TYPE_GEM,
 };
 
 /* signals */
@@ -454,6 +464,19 @@ static void _destroy_buffer(GstCameraSrc *camerasrc)
 #endif
 }
 
+static void _unmap_buffer(GstCameraSrc *camerasrc)
+{
+	int i;
+
+	for (i = 0; i < camerasrc->buffer_count; i++) {
+		if (camerasrc->vaddrs[i]) {
+			munmap(camerasrc->vaddrs[i],
+			       camerasrc->buffer_length[i]);
+			camerasrc->vaddrs[i] = NULL;
+		}
+	}
+}
+
 static gboolean _start_preview(GstCameraSrc *camerasrc)
 {
 	int ret;
@@ -495,10 +518,73 @@ static gboolean _start_preview(GstCameraSrc *camerasrc)
 	return TRUE;
 }
 
+static gboolean _start_preview_mmap(GstCameraSrc *camerasrc)
+{
+	int ret;
+	int i;
+
+	ret = nx_v4l2_reqbuf_mmap(camerasrc->clipper_video_fd, nx_clipper_video,
+				  camerasrc->buffer_count);
+	if (ret) {
+		GST_ERROR_OBJECT(camerasrc, "failed to reqbuf");
+		return FALSE;
+	}
+
+	for (i = 0; i < camerasrc->buffer_count; i++) {
+		struct v4l2_buffer v4l2_buf;
+		ret = nx_v4l2_query_buf_mmap(camerasrc->clipper_video_fd,
+					     nx_clipper_video, i, &v4l2_buf);
+		if (ret) {
+			GST_ERROR_OBJECT(camerasrc, "failed to query buf: index %d",
+					 i);
+			return FALSE;
+		}
+
+		camerasrc->vaddrs[i] = mmap(NULL,
+					    v4l2_buf.length,
+					    PROT_READ | PROT_WRITE,
+					    MAP_SHARED,
+					    camerasrc->clipper_video_fd,
+					    v4l2_buf.m.offset);
+		if (camerasrc->vaddrs[i] == MAP_FAILED) {
+			GST_ERROR_OBJECT(camerasrc, "failed to mmap: index %d",
+					 i);
+			return FALSE;
+		}
+
+		camerasrc->buffer_length[i] = v4l2_buf.length;
+	}
+
+	for (i = 0; i < camerasrc->buffer_count; i++) {
+		ret = nx_v4l2_qbuf_mmap(camerasrc->clipper_video_fd,
+					nx_clipper_video, i);
+		if (ret) {
+			GST_ERROR_OBJECT(camerasrc, "failed to qbuf: index %d",
+					 i);
+			return FALSE;
+		}
+	}
+
+	ret = nx_v4l2_streamon_mmap(camerasrc->clipper_video_fd,
+				    nx_clipper_video);
+	if (ret) {
+		GST_ERROR_OBJECT(camerasrc, "failed to streamon");
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 static void _stop_preview(GstCameraSrc *camerasrc)
 {
 	nx_v4l2_streamoff(camerasrc->clipper_video_fd, nx_clipper_video);
 	nx_v4l2_reqbuf(camerasrc->clipper_video_fd, nx_clipper_video, 0);
+}
+
+static void _stop_preview_mmap(GstCameraSrc *camerasrc)
+{
+	nx_v4l2_streamoff_mmap(camerasrc->clipper_video_fd, nx_clipper_video);
+	nx_v4l2_reqbuf_mmap(camerasrc->clipper_video_fd, nx_clipper_video, 0);
 }
 
 static gboolean _camera_start(GstCameraSrc *camerasrc)
@@ -618,9 +704,15 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 		return FALSE;
 	}
 
-	ret = nx_v4l2_set_format(clipper_video_fd, nx_clipper_video,
-				 camerasrc->width, camerasrc->height,
-				 camerasrc->pixel_format);
+	if (camerasrc->buffer_type == BUFFER_TYPE_NORMAL)
+		ret = nx_v4l2_set_format_mmap(clipper_video_fd, nx_clipper_video,
+					      camerasrc->width, camerasrc->height,
+					      camerasrc->pixel_format);
+	else
+		ret = nx_v4l2_set_format(clipper_video_fd, nx_clipper_video,
+					 camerasrc->width, camerasrc->height,
+					 camerasrc->pixel_format);
+
 	if (ret) {
 		GST_ERROR_OBJECT(camerasrc,
 				 "failed to set_format for clipper_video");
@@ -659,18 +751,27 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 
 	camerasrc->buffer_count = DEF_BUFFER_COUNT;
 
-	result = _create_buffer(camerasrc);
-	if (result == FALSE) {
-		GST_ERROR_OBJECT(camerasrc, "failed to create buffer");
-		return FALSE;
+	if (camerasrc->buffer_type == BUFFER_TYPE_GEM) {
+		result = _create_buffer(camerasrc);
+		if (result == FALSE) {
+			GST_ERROR_OBJECT(camerasrc, "failed to create buffer");
+			return FALSE;
+		}
+		return _start_preview(camerasrc);
+	} else {
+		return _start_preview_mmap(camerasrc);
 	}
-	return _start_preview(camerasrc);
 }
 
 static gboolean _camera_stop(GstCameraSrc *camerasrc)
 {
-	_stop_preview(camerasrc);
-	_destroy_buffer(camerasrc);
+	if (camerasrc->buffer_type == BUFFER_TYPE_GEM) {
+		_stop_preview(camerasrc);
+		_destroy_buffer(camerasrc);
+	} else {
+		_stop_preview_mmap(camerasrc);
+		_unmap_buffer(camerasrc);
+	}
 	return TRUE;
 }
 
@@ -887,6 +988,131 @@ ERROR:
 	
 	return GST_FLOW_ERROR;
 }
+
+struct meta_mmap_buffer {
+	int buffer_index;
+	void *data;
+	GstCameraSrc *camerasrc;
+};
+
+static void _destroy_mmap_buffer(gpointer data)
+{
+	struct meta_mmap_buffer *meta = (struct meta_mmap_buffer *)data;
+
+	if (meta) {
+		int index;
+		int ret;
+		GstCameraSrc *camerasrc;
+
+		camerasrc = meta->camerasrc;
+		index = meta->buffer_index;
+
+		GST_DEBUG_OBJECT(camerasrc, "ENTERED");
+
+		GST_DEBUG_OBJECT(camerasrc, "buffer index: %d", index);
+
+		ret = nx_v4l2_qbuf_mmap(camerasrc->clipper_video_fd,
+					nx_clipper_video,
+					index);
+		if (ret)
+			GST_ERROR_OBJECT(camerasrc, "q error");
+
+		free(meta);
+
+		GST_DEBUG_OBJECT(camerasrc, "LEAVED");
+	}
+}
+
+static GstFlowReturn _read_preview_mmap(GstCameraSrc *camerasrc,
+					GstBuffer **buffer)
+{
+	int ret;
+	int v4l2_buffer_index;
+	unsigned char *data;
+	GstMemory *gstmem = NULL;
+	GstBuffer *gstbuf = NULL;
+	int length;
+	struct meta_mmap_buffer *meta = NULL;
+	GstVideoMeta *video_meta = NULL;
+	gsize offset[3] = {0, };
+	gint stride[3] = {0, };
+
+	GST_DEBUG_OBJECT(camerasrc, "camerasrc dequeue buffer");
+	ret = nx_v4l2_dqbuf_mmap(camerasrc->clipper_video_fd, nx_clipper_video,
+			    &v4l2_buffer_index);
+	if (ret) {
+		GST_ERROR_OBJECT(camerasrc, "dq error");
+		return GST_FLOW_ERROR;
+	}
+
+	data = (unsigned char *)camerasrc->vaddrs[v4l2_buffer_index];
+	length = camerasrc->buffer_length[v4l2_buffer_index];
+
+	meta = (struct meta_mmap_buffer *)malloc(sizeof(*meta));
+	if (!meta) {
+		GST_ERROR_OBJECT(camerasrc, "failed to malloc for meta");
+		goto ERROR;
+	}
+
+	meta->buffer_index = v4l2_buffer_index;
+	meta->data = data;
+	meta->camerasrc = camerasrc;
+
+	gstmem = gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY,
+					data,
+					length,
+					0,
+					length,
+					meta,
+					_destroy_mmap_buffer);
+	if (!gstmem) {
+		GST_ERROR_OBJECT(camerasrc, "failed to gst_memory_new_wrapped for mmap buffer");
+		goto ERROR;
+	}
+
+	gstbuf = gst_buffer_new();
+	if (!gstbuf) {
+		GST_ERROR_OBJECT(camerasrc, "failed to gst_buffer_new");
+		goto ERROR;
+	}
+
+	_get_timeinfo(camerasrc, gstbuf);
+
+	gst_buffer_append_memory(gstbuf, gstmem);
+
+	stride[0] = GST_ROUND_UP_32(camerasrc->width);
+	stride[1] = GST_ROUND_UP_16(stride[0] >> 1);
+	stride[2] = stride[1];
+	offset[0] = 0;
+	offset[1] = offset[0] + (stride[0] * camerasrc->height);
+	offset[2] = offset[1] + (stride[1] * (camerasrc->height / 2));
+	video_meta = gst_buffer_add_video_meta_full(gstbuf,
+						    GST_VIDEO_FRAME_FLAG_NONE,
+						    GST_VIDEO_FORMAT_I420,
+						    camerasrc->width,
+						    camerasrc->height,
+						    3,
+						    offset,
+						    stride);
+	if (!video_meta) {
+		GST_ERROR_OBJECT(camerasrc, "failed to gst_buffer_add_video_meta_full");
+		goto ERROR;
+	}
+
+	*buffer = gstbuf;
+
+	return GST_FLOW_OK;
+
+ERROR:
+	if (gstbuf)
+		free(gstbuf);
+	if (gstmem)
+		free(gstmem);
+	if (meta)
+		_destroy_mmap_buffer(meta);
+
+	return GST_FLOW_ERROR;
+}
 #endif
 
 /* gobject_class methods */
@@ -968,6 +1194,11 @@ static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 		camerasrc->hflip = g_value_get_boolean(value);
 		GST_INFO_OBJECT(camerasrc, "Set HFLIP: %d", camerasrc->hflip);
 		break;
+	case ARG_BUFFER_TYPE:
+		camerasrc->buffer_type = g_value_get_uint(value);
+		GST_INFO_OBJECT(camerasrc, "Set BUFFER_TYPE: %u",
+				camerasrc->buffer_type);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -1024,6 +1255,9 @@ static void gst_camerasrc_get_property(GObject *object, guint prop_id,
 		break;
 	case ARG_HFLIP:
 		g_value_set_boolean(value, camerasrc->hflip);
+		break;
+	case ARG_BUFFER_TYPE:
+		g_value_set_uint(value, camerasrc->buffer_type);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1190,7 +1424,10 @@ static GstFlowReturn gst_camerasrc_create(GstPushSrc *src,
 
 	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
 
-	ret = _read_preview(camerasrc, buffer);
+	if (camerasrc->buffer_type == BUFFER_TYPE_GEM)
+		ret = _read_preview(camerasrc, buffer);
+	else
+		ret = _read_preview_mmap(camerasrc, buffer);
 
 	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 
@@ -1395,13 +1632,25 @@ static void gst_camerasrc_class_init(GstCameraSrcClass *klass)
 							     0,
 							     G_PARAM_READWRITE |
 							     G_PARAM_STATIC_STRINGS));
+
+	g_object_class_install_property(gobject_class,
+					ARG_BUFFER_TYPE,
+					g_param_spec_uint("buffer-type",
+							  "buffer-type",
+							  "Buffer Type(0:NORMAL 1:MM_VIDEO_BUFFER_TYPE_GEM)",
+							  0,
+							  1,
+							  BUFFER_TYPE_GEM,
+							  G_PARAM_READWRITE));
+
 	/* element_class overriding */
 	gst_element_class_add_pad_template(element_class,
 				gst_static_pad_template_get(&src_factory));
 	gst_element_class_set_static_metadata(element_class,
 					      "Nexell Camera Source GStreamer Plug-in",
 					      "Source/Video",
-					      "camera src for videosrc based GStreamer Plug-in",					      "Sungwoo Park <swpark@nexell.co.kr>");
+					      "camera src for videosrc based GStreamer Plug-in",
+					      "Sungwoo Park <swpark@nexell.co.kr>");
 	/* basesrc_class overriding */
 	basesrc_class->start = gst_camerasrc_start;
 	basesrc_class->stop = gst_camerasrc_stop;
@@ -1449,6 +1698,9 @@ static void gst_camerasrc_init(GstCameraSrc *camerasrc)
 	/* flip attribute */
 	camerasrc->vflip = FALSE;
 	camerasrc->hflip = FALSE;
+
+	/* buffer type */
+	camerasrc->buffer_type = BUFFER_TYPE_GEM;
 
 	/* buffer */
 	camerasrc->buffer_count = 0;

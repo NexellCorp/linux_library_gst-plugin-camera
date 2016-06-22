@@ -111,6 +111,9 @@ struct _GstCameraSrc {
 	gboolean vflip;
 	gboolean hflip;
 
+	/* buffer type */
+	guint32 buffer_type;
+
 	/* buffer */
 	guint32 buffer_count;
 	guint32 buffer_size;
@@ -120,6 +123,7 @@ struct _GstCameraSrc {
 	int flinks[MAX_BUFFER_COUNT];
 	int dma_fds[MAX_BUFFER_COUNT];
 	void *vaddrs[MAX_BUFFER_COUNT];
+	int buffer_length[MAX_BUFFER_COUNT];
 #else
 	/* TBM Buffer */
 	tbm_bufmgr bufmgr;
