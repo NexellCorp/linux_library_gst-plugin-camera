@@ -231,6 +231,7 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 	const gchar *caps_format_name = NULL;
 	guint32 pixel_format;
 	guint32 caps_fourcc = 0;
+	guint32 rate = 0;
 	const GValue *framerate;
 	GstStructure *s = NULL;
 	gboolean ret;
@@ -263,14 +264,6 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 		buffer_type = MM_VIDEO_BUFFER_TYPE_GEM;
 		gst_structure_set(s, "buffer-type", G_TYPE_INT, MM_VIDEO_BUFFER_TYPE_GEM, NULL);
 	}
-
-	if (w != camerasrc->width)
-		gst_structure_set(s, "width", G_TYPE_INT, camerasrc->width, NULL);
-
-	if (h != camerasrc->height)
-		gst_structure_set(s, "height", G_TYPE_INT, camerasrc->height, NULL);
-	if (buffer_type != MM_VIDEO_BUFFER_TYPE_GEM)
-		gst_structure_set(s, "buffer-type", G_TYPE_INT, MM_VIDEO_BUFFER_TYPE_GEM, NULL);
 	framerate = gst_structure_get_value(s, "framerate");
 	if (!framerate) {
 		GST_INFO("Set FPS as default(30)");
@@ -291,13 +284,10 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 			fps_d = 1;
 		}
 	}
-	camerasrc->fps = (guint)((float)fps_n / (float)fps_d);
-	if (camerasrc->fps != DEF_FPS)
-		camerasrc->fps = DEF_FPS;
-	gst_structure_set(s, "framerate", GST_TYPE_FRACTION, DEF_FPS, 1, NULL);
+	rate = (guint)((float)fps_n / (float)fps_d);
+
 	mime_type = gst_structure_get_name(s);
 	*size = 0;
-	#if 0
 	if (!strcmp(mime_type, "video/x-raw")) {
 		caps_format_name = gst_structure_get_string(s, "format");
 		if (caps_format_name == NULL) {
@@ -313,20 +303,23 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 					 "failed to get pixel format");
 			return ret;
 		}
-		camerasrc->pixel_format = pixel_format;
-		gst_structure_set(s, "format", G_TYPE_STRING, caps_format_name, NULL);
+		//camerasrc->pixel_format = pixel_format;
+		//gst_structure_set(s, "format", G_TYPE_STRING, caps_format_name, NULL);
 	} else {
 		GST_ERROR_OBJECT(camerasrc, "Unsupported mime type: %s",
 				 mime_type);
 		return FALSE;
 	}
-	#else
-	if (strcmp(mime_type, "video/x-raw")) {
-		GST_ERROR_OBJECT(camerasrc, "Unsupported mime type: %s", mime_type);
+
+	if((w != camerasrc->width) || (h != camerasrc->height) ||
+		(camerasrc->fps != rate) || (buffer_type != MM_VIDEO_BUFFER_TYPE_GEM) ||
+		(camerasrc->pixel_format != pixel_format)) {
+		GST_DEBUG_OBJECT(camerasrc,
+		"negotiated caps isn't matched with the caps of camerasrc : %" GST_PTR_FORMAT, caps);
+		GST_DEBUG_OBJECT(camerasrc,
+		"camerasrc caps : %" GST_PTR_FORMAT, camerasrc->caps);
 		return FALSE;
 	}
-	#endif
-
 OUT:
 	/* for debugging */
 	caps_string = gst_caps_to_string(caps);
@@ -1115,6 +1108,30 @@ ERROR:
 }
 #endif
 
+static GstCaps*
+_set_caps_init(GstCameraSrc *camerasrc)
+{
+	GstCaps *caps = NULL;
+
+	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
+	caps =  gst_caps_new_simple ("video/x-raw",
+		"format", G_TYPE_STRING, "I420",
+		"framerate", GST_TYPE_FRACTION, camerasrc->fps, 1,
+		"buffer-type", G_TYPE_INT, MM_VIDEO_BUFFER_TYPE_GEM,
+		"width", G_TYPE_INT, camerasrc->width,
+		"height", G_TYPE_INT, camerasrc->height,
+		NULL);
+       	if(caps != NULL)
+		camerasrc->caps = gst_caps_copy(caps);
+
+	if(camerasrc->caps) {
+		GST_INFO_OBJECT(camerasrc, "new caps %" GST_PTR_FORMAT, camerasrc->caps);
+		GST_INFO_OBJECT(camerasrc, "cap size = %d ", gst_caps_get_size(camerasrc->caps));
+	}
+
+	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
+	return caps;
+}
 /* gobject_class methods */
 static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 				       const GValue *value, GParamSpec *pspec)
@@ -1297,6 +1314,8 @@ static gboolean gst_camerasrc_stop(GstBaseSrc *src)
 
 	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
 
+	if(camerasrc->caps)
+		gst_caps_unref(camerasrc->caps);
 	_camera_stop(camerasrc);
 
 	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
@@ -1313,12 +1332,19 @@ static GstCaps *gst_camerasrc_get_caps(GstBaseSrc *src, GstCaps *filter)
 
 	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
 
-	caps = gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_SRC_PAD
-							   (camerasrc)));
+	GST_INFO_OBJECT(camerasrc, "this caps: %" GST_PTR_FORMAT, camerasrc->caps);
+	if((camerasrc->caps==NULL) || (gst_caps_is_empty(camerasrc->caps)))
+		caps = _set_caps_init(camerasrc);
+	else
+		caps = gst_caps_copy(camerasrc->caps);
+	#if 0
+		caps = gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_SRC_PAD
+								(camerasrc)));
+	#endif
 	if (caps && filter)
 		gst_caps_take(&caps, gst_caps_intersect(caps, filter));
 
-	GST_INFO_OBJECT(camerasrc, "probed caps: %p", caps);
+	GST_INFO_OBJECT(camerasrc, "probed caps: %" GST_PTR_FORMAT, caps);
 	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 
 	return caps;
@@ -1338,6 +1364,7 @@ static gboolean gst_camerasrc_set_caps(GstBaseSrc *src, GstCaps *caps)
 		GST_ERROR_OBJECT(camerasrc, "can't get capture information from caps %p", caps);
 		return FALSE;
 	}
+	GST_DEBUG_OBJECT(camerasrc, " fixed caps : %" GST_PTR_FORMAT, camerasrc->caps);
 
 	camerasrc->buffer_size = size;
 
@@ -1372,19 +1399,22 @@ static gboolean gst_camerasrc_negotiate(GstBaseSrc *src)
 
 	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
 
-	thiscaps = gst_pad_query_caps(GST_BASE_SRC_PAD(src), NULL);
-	GST_DEBUG_OBJECT(src, "caps of src: %" GST_PTR_FORMAT, thiscaps);
+	if((camerasrc->caps) || (!gst_caps_is_empty(camerasrc->caps)))
+		thiscaps = gst_caps_copy(camerasrc->caps);
+	else
+		thiscaps = gst_pad_query_caps(GST_BASE_SRC_PAD(src), NULL);
+	GST_DEBUG_OBJECT(camerasrc, "caps of src: %" GST_PTR_FORMAT, thiscaps);
 
 	if (thiscaps == NULL || gst_caps_is_any(thiscaps))
 		return TRUE;
 
 	peercaps = gst_pad_peer_query_caps(GST_BASE_SRC_PAD(src), NULL);
-	GST_DEBUG_OBJECT(src, "caps of peer: %" GST_PTR_FORMAT, peercaps);
+	GST_DEBUG_OBJECT(camerasrc, "caps of peer: %" GST_PTR_FORMAT, peercaps);
 
 	caps = NULL;
 	if (peercaps && !gst_caps_is_any(peercaps)) {
 		GstCaps *icaps = _find_intersect_caps(thiscaps, peercaps);
-		GST_DEBUG_OBJECT(src, "intersect: %" GST_PTR_FORMAT,
+		GST_DEBUG_OBJECT(camerasrc, "intersect: %" GST_PTR_FORMAT,
 				 icaps);
 		if (icaps)
 			caps = _find_best_match_caps(peercaps, icaps);
@@ -1397,7 +1427,7 @@ static gboolean gst_camerasrc_negotiate(GstBaseSrc *src)
 		caps = gst_caps_fixate(caps);
 
 		if (!gst_caps_is_empty(caps)) {
-			GST_DEBUG_OBJECT(src, "fixated to: %"
+			GST_DEBUG_OBJECT(camerasrc, "fixated to: %"
 					 GST_PTR_FORMAT, caps);
 
 			if (gst_caps_is_any(caps))
@@ -1705,6 +1735,9 @@ static void gst_camerasrc_init(GstCameraSrc *camerasrc)
 	/* buffer */
 	camerasrc->buffer_count = 0;
 	camerasrc->buffer_size = 0;
+
+	camerasrc->caps = NULL;
+
 #ifdef USE_NATIVE_DRM_BUFFER
 	camerasrc->drm_fd = -1;
 	for (i = 0; i < MAX_BUFFER_COUNT; i++) {

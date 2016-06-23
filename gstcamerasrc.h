@@ -117,6 +117,8 @@ struct _GstCameraSrc {
 	/* buffer */
 	guint32 buffer_count;
 	guint32 buffer_size;
+
+	GstCaps *caps;
 #ifdef USE_NATIVE_DRM_BUFFER
 	int drm_fd;
 	int gem_fds[MAX_BUFFER_COUNT];
