@@ -1172,7 +1172,7 @@ _set_pixel_format(guint32 format, gchar *format_string)
 		strcpy(format_string, "I420");
                 break;
         case V4L2_PIX_FMT_YUYV:
-		strcpy(format_string, "YUYV");
+		strcpy(format_string, "YUY2");
 		break;
 	default:
 		break;
@@ -1761,7 +1761,7 @@ static void gst_camerasrc_class_init(GstCameraSrcClass *klass)
 					ARG_FORMAT,
 					g_param_spec_string("format",
 							  "format",
-							  "format(I420, YUYV, default : I420)",
+							  "format(I420, YUY2, default : I420)",
 							  "I420",
 							  G_PARAM_READWRITE
 							  /*G_PARAM_STATIC_STRINGS*/));
