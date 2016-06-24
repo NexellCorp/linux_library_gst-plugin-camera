@@ -82,6 +82,9 @@ enum {
 	/* buffer type */
 	ARG_BUFFER_TYPE,
 
+	/* format */
+	ARG_FORMAT,
+
 	ARG_NUM,
 };
 
@@ -150,7 +153,7 @@ static GstStaticPadTemplate src_factory =
 				);
 
 /* util function */
-static gboolean _get_frame_size(guint32 fourcc, int width, int height,
+static gboolean _get_frame_size(GstCameraSrc *camerasrc, guint32 fourcc, int width, int height,
 				guint *size)
 {
 	guint y_size;
@@ -303,8 +306,6 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 					 "failed to get pixel format");
 			return ret;
 		}
-		//camerasrc->pixel_format = pixel_format;
-		//gst_structure_set(s, "format", G_TYPE_STRING, caps_format_name, NULL);
 	} else {
 		GST_ERROR_OBJECT(camerasrc, "Unsupported mime type: %s",
 				 mime_type);
@@ -594,7 +595,7 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 
 	module = camerasrc->module;
 
-	result = _get_frame_size(camerasrc->pixel_format, camerasrc->width,
+	result = _get_frame_size(camerasrc, camerasrc->pixel_format, camerasrc->width,
 				 camerasrc->height, &camerasrc->buffer_size);
 	if (result == FALSE) {
 		GST_ERROR_OBJECT(camerasrc, "failed to get frame_size");
@@ -875,10 +876,72 @@ static GstCameraBuffer *_camerasrc_buffer_new(GstCameraSrc *camerasrc)
 
 static void gst_camerasrc_buffer_finalize(GstCameraBuffer *buffer);
 
+static guint32 _get_mm_pixel_format(GstCameraSrc *camerasrc, guint32 pixel_format)
+{
+	guint32 mm_pixel_format = -1;
+	switch (pixel_format) {
+        case V4L2_PIX_FMT_YUV420:
+		mm_pixel_format = MM_PIXEL_FORMAT_I420;
+                break;
+        case V4L2_PIX_FMT_YUYV:
+		mm_pixel_format = MM_PIXEL_FORMAT_YUYV;
+                break;
+	default:
+		GST_ERROR_OBJECT(camerasrc, "not supported format: default : I420 ");
+		mm_pixel_format = MM_PIXEL_FORMAT_I420;
+		break;
+	}
+	GST_INFO_OBJECT(camerasrc,"mm pixel_format is [%d]",mm_pixel_format);
+	return mm_pixel_format;
+}
+static gboolean
+_set_format_planes(GstCameraSrc *camerasrc, guint32 format, MMVideoBuffer *mm_buf)
+{
+	guint32 width = 0, height = 0, pitch = 0;
+	width = mm_buf->width[0];
+        height = mm_buf->height[0];
+	GST_DEBUG_OBJECT(camerasrc, "Entered");
+
+	switch (format) {
+	case V4L2_PIX_FMT_YUV420:
+	case V4L2_PIX_FMT_YVU420:
+		pitch  = GST_ROUND_UP_32(width);
+		mm_buf->plane_num = 3;
+                mm_buf->stride_width[0] = pitch;
+                mm_buf->stride_width[1] = GST_ROUND_UP_16(mm_buf->stride_width[0] >> 1);
+                mm_buf->stride_width[2] = mm_buf->stride_width[1];
+		mm_buf->stride_height[0] = GST_ROUND_UP_16(height);
+        	mm_buf->stride_height[1] = GST_ROUND_UP_16(height >> 1);
+        	mm_buf->stride_height[2] = mm_buf->stride_height[1];
+		break;
+	case V4L2_PIX_FMT_YUYV:
+	case V4L2_PIX_FMT_YVYU:
+	case V4L2_PIX_FMT_UYVY:
+	case V4L2_PIX_FMT_VYUY:
+		pitch  = GST_ROUND_UP_32(width) * 2;
+		mm_buf->plane_num = 1;
+		mm_buf->stride_width[0] = pitch;
+		break;
+	case V4L2_PIX_FMT_NV21:
+	case V4L2_PIX_FMT_NV12:
+		pitch  = GST_ROUND_UP_32(width);
+		mm_buf->plane_num = 2;
+		mm_buf->stride_width[0] = pitch;
+                mm_buf->stride_width[1] = mm_buf->stride_width[0];
+		mm_buf->stride_height[0] = GST_ROUND_UP_32(height);
+		mm_buf->stride_height[1] = mm_buf->stride_height[0];
+		break;
+	default:
+		break;
+	}
+	GST_DEBUG_OBJECT(camerasrc, "Leaved");
+	return TRUE;
+}
 static GstMemory *_get_zero_copy_data(GstCameraSrc *camerasrc, guint32 index)
 {
 	GstMemory *meta = NULL;
 	MMVideoBuffer *mm_buf = NULL;
+	guint32 width = 0, height = 0;
 
 	mm_buf = (MMVideoBuffer *)malloc(sizeof(*mm_buf));
 	if (!mm_buf) {
@@ -903,19 +966,12 @@ static GstMemory *_get_zero_copy_data(GstCameraSrc *camerasrc, guint32 index)
 	/* TODO: TIZEN */
 	mm_buf->type = MM_VIDEO_BUFFER_TYPE_TBM_BO;
 #endif
-
 	mm_buf->width[0] = camerasrc->width;
 	mm_buf->height[0] = camerasrc->height;
 	mm_buf->size[0] = camerasrc->buffer_size;
 	/* FIXME: currently test only YUV420 format */
-	mm_buf->plane_num = 3;
-	mm_buf->format = MM_PIXEL_FORMAT_I420;
-	mm_buf->stride_width[0] = GST_ROUND_UP_32(camerasrc->width);
-	mm_buf->stride_width[1] = GST_ROUND_UP_16(mm_buf->stride_width[0] >> 1);
-	mm_buf->stride_width[2] = mm_buf->stride_width[1];
-	mm_buf->stride_height[0] = GST_ROUND_UP_16(camerasrc->height);
-	mm_buf->stride_height[1] = GST_ROUND_UP_16(camerasrc->height >> 1);
-	mm_buf->stride_height[2] = mm_buf->stride_height[1];
+	mm_buf->format = _get_mm_pixel_format(camerasrc, camerasrc->pixel_format);
+	_set_format_planes(camerasrc, camerasrc->pixel_format, mm_buf);
 
 	meta = gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY,
 				      mm_buf,
@@ -1108,14 +1164,31 @@ ERROR:
 }
 #endif
 
+static gboolean
+_set_pixel_format(guint32 format, gchar *format_string)
+{
+	switch(format) {
+	case V4L2_PIX_FMT_YUV420:
+		strcpy(format_string, "I420");
+                break;
+        case V4L2_PIX_FMT_YUYV:
+		strcpy(format_string, "YUYV");
+		break;
+	default:
+		break;
+	}
+}
+
 static GstCaps*
 _set_caps_init(GstCameraSrc *camerasrc)
 {
 	GstCaps *caps = NULL;
+	gchar format[10] = {0,};
 
 	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
+	_set_pixel_format(camerasrc->pixel_format, format);
 	caps =  gst_caps_new_simple ("video/x-raw",
-		"format", G_TYPE_STRING, "I420",
+		"format", G_TYPE_STRING, format,
 		"framerate", GST_TYPE_FRACTION, camerasrc->fps, 1,
 		"buffer-type", G_TYPE_INT, MM_VIDEO_BUFFER_TYPE_GEM,
 		"width", G_TYPE_INT, camerasrc->width,
@@ -1137,6 +1210,7 @@ static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 				       const GValue *value, GParamSpec *pspec)
 {
 	GstCameraSrc *camerasrc = NULL;
+	gchar pixel_format[10] = {0,};
 
 	g_return_if_fail(GST_IS_CAMERASRC(object));
 	camerasrc = GST_CAMERASRC(object);
@@ -1216,6 +1290,15 @@ static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 		GST_INFO_OBJECT(camerasrc, "Set BUFFER_TYPE: %u",
 				camerasrc->buffer_type);
 		break;
+	case ARG_FORMAT:
+		strcpy(pixel_format, g_value_dup_string(value));
+                if(!_get_pixel_format(MAKE_FOURCC_FROM_STRING(pixel_format),&camerasrc->pixel_format)) {
+                        GST_ERROR_OBJECT(camerasrc,
+                                         "failed to get pixel format");
+                }
+		GST_INFO_OBJECT(camerasrc, "Set format: %s",
+				pixel_format);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -1275,6 +1358,8 @@ static void gst_camerasrc_get_property(GObject *object, guint prop_id,
 		break;
 	case ARG_BUFFER_TYPE:
 		g_value_set_uint(value, camerasrc->buffer_type);
+		break;
+	case ARG_FORMAT:
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1672,6 +1757,14 @@ static void gst_camerasrc_class_init(GstCameraSrcClass *klass)
 							  1,
 							  BUFFER_TYPE_GEM,
 							  G_PARAM_READWRITE));
+	g_object_class_install_property(gobject_class,
+					ARG_FORMAT,
+					g_param_spec_string("format",
+							  "format",
+							  "format(I420, YUYV, default : I420)",
+							  "I420",
+							  G_PARAM_READWRITE
+							  /*G_PARAM_STATIC_STRINGS*/));
 
 	/* element_class overriding */
 	gst_element_class_add_pad_template(element_class,
