@@ -1085,7 +1085,7 @@ static GstFlowReturn _read_preview_mmap(GstCameraSrc *camerasrc,
 	GstVideoMeta *video_meta = NULL;
 	gsize offset[3] = {0, };
 	gint stride[3] = {0, };
-
+	int format = 0;
 	GST_DEBUG_OBJECT(camerasrc, "camerasrc dequeue buffer");
 	ret = nx_v4l2_dqbuf_mmap(camerasrc->clipper_video_fd, nx_clipper_video,
 			    &v4l2_buffer_index);
@@ -1128,16 +1128,26 @@ static GstFlowReturn _read_preview_mmap(GstCameraSrc *camerasrc,
 	_get_timeinfo(camerasrc, gstbuf);
 
 	gst_buffer_append_memory(gstbuf, gstmem);
-
-	stride[0] = GST_ROUND_UP_32(camerasrc->width);
-	stride[1] = GST_ROUND_UP_16(stride[0] >> 1);
-	stride[2] = stride[1];
-	offset[0] = 0;
-	offset[1] = offset[0] + (stride[0] * camerasrc->height);
-	offset[2] = offset[1] + (stride[1] * (camerasrc->height / 2));
+	if(camerasrc->pixel_format == V4L2_PIX_FMT_YUV420) {
+		stride[0] = GST_ROUND_UP_32(camerasrc->width);
+		stride[1] = GST_ROUND_UP_16(stride[0] >> 1);
+		stride[2] = stride[1];
+		offset[0] = 0;
+		offset[1] = offset[0] + (stride[0] * camerasrc->height);
+		offset[2] = offset[1] + (stride[1] * (camerasrc->height / 2));
+		format = GST_VIDEO_FORMAT_I420;
+	} else if(camerasrc->pixel_format == V4L2_PIX_FMT_YUYV) {
+		stride[0] = GST_ROUND_UP_32(camerasrc->width)*2;
+		stride[1] = 0;
+		stride[2] = 0;
+		offset[0] = 0;
+		offset[1] = 0;
+		offset[2] = 0;
+		format = GST_VIDEO_FORMAT_YUY2;
+	}
 	video_meta = gst_buffer_add_video_meta_full(gstbuf,
 						    GST_VIDEO_FRAME_FLAG_NONE,
-						    GST_VIDEO_FORMAT_I420,
+						    format,
 						    camerasrc->width,
 						    camerasrc->height,
 						    3,
