@@ -1086,6 +1086,8 @@ static GstFlowReturn _read_preview_mmap(GstCameraSrc *camerasrc,
 	gsize offset[3] = {0, };
 	gint stride[3] = {0, };
 	int format = 0;
+	int plane_num = 0;
+
 	GST_DEBUG_OBJECT(camerasrc, "camerasrc dequeue buffer");
 	ret = nx_v4l2_dqbuf_mmap(camerasrc->clipper_video_fd, nx_clipper_video,
 			    &v4l2_buffer_index);
@@ -1136,6 +1138,7 @@ static GstFlowReturn _read_preview_mmap(GstCameraSrc *camerasrc,
 		offset[1] = offset[0] + (stride[0] * camerasrc->height);
 		offset[2] = offset[1] + (stride[1] * (camerasrc->height / 2));
 		format = GST_VIDEO_FORMAT_I420;
+		plane_num = 3;
 	} else if(camerasrc->pixel_format == V4L2_PIX_FMT_YUYV) {
 		stride[0] = GST_ROUND_UP_32(camerasrc->width)*2;
 		stride[1] = 0;
@@ -1144,13 +1147,14 @@ static GstFlowReturn _read_preview_mmap(GstCameraSrc *camerasrc,
 		offset[1] = 0;
 		offset[2] = 0;
 		format = GST_VIDEO_FORMAT_YUY2;
+		plane_num = 1;
 	}
 	video_meta = gst_buffer_add_video_meta_full(gstbuf,
 						    GST_VIDEO_FRAME_FLAG_NONE,
 						    format,
 						    camerasrc->width,
 						    camerasrc->height,
-						    3,
+						    plane_num,
 						    offset,
 						    stride);
 	if (!video_meta) {
