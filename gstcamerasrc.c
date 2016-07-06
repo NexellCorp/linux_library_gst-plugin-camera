@@ -1024,6 +1024,7 @@ static GstFlowReturn _read_preview(GstCameraSrc *camerasrc, GstBuffer **buffer)
 		goto ERROR;
 	}
 
+	gst_buffer_add_mmvideobuffer_meta(vid_buf->buffer, 0);
 	*buffer = vid_buf->buffer;
 
 	return GST_FLOW_OK;
