@@ -132,29 +132,14 @@ static GstStaticPadTemplate src_factory =
 				GST_PAD_SRC,
 				GST_PAD_ALWAYS,
 				GST_STATIC_CAPS("video/x-raw, "
-				 		"format = (string) { I420 }, "
-				 		"width = (int) [ 1, 4096 ], "
-				 		"height = (int) [ 1, 4096 ]; ")
-				/* 		"video/x-raw," */
-				/* 		"format = (string { YV12 }, " */
-				/* 		"width = (int) [ 1, 4096 ], " */
-				/* 		"height = (int) [ 1, 4096 ]; " */
-				/* 		"video/x-raw," */
-				/* 		"format = (string { NV12 }, " */
-				/* 		"width = (int) [ 1, 4096 ], " */
-				/* 		"height = (int) [ 1, 4096 ]; " */
-				/* 		"video/x-raw," */
-				/* 		"format = (string { NV21 }, " */
-				/* 		"width = (int) [ 1, 4096 ], " */
-				/* 		"height = (int) [ 1, 4096 ]; ") */
-				//GST_STATIC_CAPS(
-				//		 "video/x-raw"
-				//		)
-				);
+						"format = (string) { I420 }, "
+						"width = (int) [ 1, 4096 ], "
+						"height = (int) [ 1, 4096 ]; ")
+			       );
 
 /* util function */
-static gboolean _get_frame_size(GstCameraSrc *camerasrc, guint32 fourcc, int width, int height,
-				guint *size)
+static gboolean _get_frame_size(GstCameraSrc *camerasrc, guint32 fourcc,
+				int width, int height, guint *size)
 {
 	guint y_size;
 	guint y_stride;
@@ -249,28 +234,25 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 
 	if (!gst_structure_get_int(s, "width", &w)) {
 		GST_ERROR_OBJECT(camerasrc, "failed to get width from structure(%p)", s);
-		/* return FALSE; */
 		w = camerasrc->width;
 		gst_structure_set(s, "width", G_TYPE_INT, w, NULL);
 	}
 
 	if (!gst_structure_get_int(s, "height", &h)) {
 		GST_ERROR_OBJECT(camerasrc, "failed to get height from structure(%p)", s);
-		/* return FALSE; */
 		h = camerasrc->height;
 		gst_structure_set(s, "height", G_TYPE_INT, h, NULL);
 	}
 
 	if (!gst_structure_get_int(s, "buffer-type", &buffer_type)) {
 		GST_ERROR_OBJECT(camerasrc, "failed to get buffer_type from structure(%p)", s);
-		/* return FALSE; */
 		buffer_type = MM_VIDEO_BUFFER_TYPE_GEM;
-		gst_structure_set(s, "buffer-type", G_TYPE_INT, MM_VIDEO_BUFFER_TYPE_GEM, NULL);
+		gst_structure_set(s, "buffer-type", G_TYPE_INT,
+				  MM_VIDEO_BUFFER_TYPE_GEM, NULL);
 	}
 	framerate = gst_structure_get_value(s, "framerate");
 	if (!framerate) {
 		GST_INFO("Set FPS as default(30)");
-
 		fps_n = DEF_FPS;
 		fps_d = 1;
 	} else {
@@ -295,7 +277,6 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 		caps_format_name = gst_structure_get_string(s, "format");
 		if (caps_format_name == NULL) {
 			GST_ERROR_OBJECT(camerasrc, "failed to get caps_format_name");
-			/* return FALSE; */
 			goto OUT;
 		}
 		caps_fourcc = MAKE_FOURCC_FROM_STRING(caps_format_name);
@@ -312,13 +293,17 @@ static gboolean _get_caps_info(GstCameraSrc *camerasrc, GstCaps *caps,
 		return FALSE;
 	}
 
-	if((w != camerasrc->width) || (h != camerasrc->height) ||
-		(camerasrc->fps != rate) || (buffer_type != MM_VIDEO_BUFFER_TYPE_GEM) ||
-		(camerasrc->pixel_format != pixel_format)) {
+	if((w != camerasrc->width) ||
+	   (h != camerasrc->height) ||
+	   (camerasrc->fps != rate) ||
+	   (buffer_type != MM_VIDEO_BUFFER_TYPE_GEM) ||
+	   (camerasrc->pixel_format != pixel_format)) {
 		GST_DEBUG_OBJECT(camerasrc,
-		"negotiated caps isn't matched with the caps of camerasrc : %" GST_PTR_FORMAT, caps);
+				 "negotiated caps isn't matched with the caps of camerasrc : %"
+				 GST_PTR_FORMAT, caps);
 		GST_DEBUG_OBJECT(camerasrc,
-		"camerasrc caps : %" GST_PTR_FORMAT, camerasrc->caps);
+				 "camerasrc caps : %" GST_PTR_FORMAT,
+				 camerasrc->caps);
 		return FALSE;
 	}
 OUT:
@@ -362,13 +347,6 @@ static gboolean _create_buffer(GstCameraSrc *camerasrc)
 					 "failed to gem to dma %d", i);
 			return FALSE;
 		}
-		#if 0	
-		if (get_vaddr(drm_fd, gem_fd, camerasrc->buffer_size, &vaddr)) {
-			GST_ERROR_OBJECT(camerasrc,
-					 "failed to get_vaddr %d", i);
-			return FALSE;
-		}
-		#endif
 		camerasrc->gem_fds[i] = gem_fd;
 		camerasrc->dma_fds[i] = dma_fd;
 		camerasrc->vaddrs[i] = vaddr;
@@ -489,6 +467,7 @@ static gboolean _start_preview(GstCameraSrc *camerasrc)
 				   nx_clipper_video, 1, i,
 				   &camerasrc->dma_fds[i],
 				   (int *)&camerasrc->buffer_size);
+		g_atomic_int_add(&camerasrc->num_queued, 1);
 #else
 		camerasrc_buffer_t *buf = &camerasrc->buffer[i];
 		ret = nx_v4l2_qbuf(camerasrc->clipper_video_fd,
@@ -557,6 +536,8 @@ static gboolean _start_preview_mmap(GstCameraSrc *camerasrc)
 					 i);
 			return FALSE;
 		}
+
+		g_atomic_int_add(&camerasrc->num_queued, 1);
 	}
 
 	ret = nx_v4l2_streamon_mmap(camerasrc->clipper_video_fd,
@@ -595,8 +576,9 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 
 	module = camerasrc->module;
 
-	result = _get_frame_size(camerasrc, camerasrc->pixel_format, camerasrc->width,
-				 camerasrc->height, &camerasrc->buffer_size);
+	result = _get_frame_size(camerasrc, camerasrc->pixel_format,
+				 camerasrc->width, camerasrc->height,
+				 &camerasrc->buffer_size);
 	if (result == FALSE) {
 		GST_ERROR_OBJECT(camerasrc, "failed to get frame_size");
 		return result;
@@ -668,7 +650,7 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 		}
 	}
 
-	/* FIXME: why following format is right format? */
+	/* TODO: need property for bus format */
 	bus_format = MEDIA_BUS_FMT_YUYV8_2X8;
 	ret = nx_v4l2_set_format(sensor_fd, nx_sensor_subdev, camerasrc->width,
 				 camerasrc->height, bus_format);
@@ -699,8 +681,10 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 	}
 
 	if (camerasrc->buffer_type == BUFFER_TYPE_NORMAL)
-		ret = nx_v4l2_set_format_mmap(clipper_video_fd, nx_clipper_video,
-					      camerasrc->width, camerasrc->height,
+		ret = nx_v4l2_set_format_mmap(clipper_video_fd,
+					      nx_clipper_video,
+					      camerasrc->width,
+					      camerasrc->height,
 					      camerasrc->pixel_format);
 	else
 		ret = nx_v4l2_set_format(clipper_video_fd, nx_clipper_video,
@@ -713,26 +697,24 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 		return FALSE;
 	}
 
-	if (camerasrc->crop_x && camerasrc->crop_y && camerasrc->crop_width
-	    && camerasrc->crop_height) {
+	if (camerasrc->crop_x &&
+	    camerasrc->crop_y &&
+	    camerasrc->crop_width &&
+	    camerasrc->crop_height)
 		ret = nx_v4l2_set_crop(clipper_subdev_fd, nx_clipper_subdev,
 				       camerasrc->crop_x, camerasrc->crop_y,
 				       camerasrc->crop_width,
 				       camerasrc->crop_height);
-		if (ret) {
-			GST_ERROR_OBJECT(camerasrc,
-					 "failed to set_crop for clipper_subdev");
-			return FALSE;
-		}
-	} else {
+	else
 		ret = nx_v4l2_set_crop(clipper_subdev_fd, nx_clipper_subdev,
 				       0, 0,
 				       camerasrc->width, camerasrc->height);
-		if (ret) {
-			GST_ERROR_OBJECT(camerasrc,
-					 "failed to set_crop for clipper_subdev");
-			return FALSE;
-		}
+
+	if (ret) {
+		GST_ERROR_OBJECT(camerasrc,
+				 "failed to set_crop for clipper_subdev"
+				);
+		return FALSE;
 	}
 
 	camerasrc->sensor_fd = sensor_fd;
@@ -759,6 +741,9 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 
 static gboolean _camera_stop(GstCameraSrc *camerasrc)
 {
+	camerasrc->is_stopping = TRUE;
+	g_cond_signal(&camerasrc->empty_cond);
+
 	if (camerasrc->buffer_type == BUFFER_TYPE_GEM) {
 		_stop_preview(camerasrc);
 		_destroy_buffer(camerasrc);
@@ -861,6 +846,41 @@ static gboolean _get_timeinfo(GstCameraSrc *camerasrc, GstBuffer *buffer)
 	return TRUE;
 }
 
+static gboolean _get_timeinfo_with_timestamp(GstCameraSrc *camerasrc,
+					     GstBuffer *buffer,
+					     struct timeval *timeval)
+{
+	GstClock *clock;
+	GstClockTime timestamp;
+	GstClockTime duration;
+
+	timestamp = GST_CLOCK_TIME_NONE;
+	duration = GST_CLOCK_TIME_NONE;
+
+	clock = GST_ELEMENT_CLOCK(camerasrc);
+	if (clock) {
+		gst_object_ref(clock);
+		if (timeval) {
+			timestamp = GST_TIMEVAL_TO_TIME(*timeval);
+		} else {
+			timestamp = gst_clock_get_time(clock) -
+				GST_ELEMENT(camerasrc)->base_time;
+		}
+		gst_object_unref(clock);
+
+		if (camerasrc->fps > 0)
+			duration = gst_util_uint64_scale_int(GST_SECOND, 1,
+							     camerasrc->fps);
+		else
+			duration = gst_util_uint64_scale_int(GST_SECOND, 1, 30);
+	}
+
+	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
+	GST_BUFFER_DURATION(buffer) = duration;
+
+	return TRUE;
+}
+
 #ifdef FOLLOWING_SAMSUNG_SCHEME
 
 static GstCameraBuffer *_camerasrc_buffer_new(GstCameraSrc *camerasrc)
@@ -876,9 +896,11 @@ static GstCameraBuffer *_camerasrc_buffer_new(GstCameraSrc *camerasrc)
 
 static void gst_camerasrc_buffer_finalize(GstCameraBuffer *buffer);
 
-static guint32 _get_mm_pixel_format(GstCameraSrc *camerasrc, guint32 pixel_format)
+static guint32 _get_mm_pixel_format(GstCameraSrc *camerasrc,
+				    guint32 pixel_format)
 {
 	guint32 mm_pixel_format = -1;
+
 	switch (pixel_format) {
         case V4L2_PIX_FMT_YUV420:
 		mm_pixel_format = MM_PIXEL_FORMAT_I420;
@@ -891,11 +913,12 @@ static guint32 _get_mm_pixel_format(GstCameraSrc *camerasrc, guint32 pixel_forma
 		mm_pixel_format = MM_PIXEL_FORMAT_I420;
 		break;
 	}
-	GST_INFO_OBJECT(camerasrc,"mm pixel_format is [%d]",mm_pixel_format);
+
 	return mm_pixel_format;
 }
 static gboolean
-_set_format_planes(GstCameraSrc *camerasrc, guint32 format, MMVideoBuffer *mm_buf)
+_set_format_planes(GstCameraSrc *camerasrc, guint32 format,
+		   MMVideoBuffer *mm_buf)
 {
 	guint32 width = 0, height = 0, pitch = 0;
 	width = mm_buf->width[0];
@@ -908,7 +931,8 @@ _set_format_planes(GstCameraSrc *camerasrc, guint32 format, MMVideoBuffer *mm_bu
 		pitch  = GST_ROUND_UP_32(width);
 		mm_buf->plane_num = 3;
                 mm_buf->stride_width[0] = pitch;
-                mm_buf->stride_width[1] = GST_ROUND_UP_16(mm_buf->stride_width[0] >> 1);
+                mm_buf->stride_width[1] =
+			GST_ROUND_UP_16(mm_buf->stride_width[0] >> 1);
                 mm_buf->stride_width[2] = mm_buf->stride_width[1];
 		mm_buf->stride_height[0] = GST_ROUND_UP_16(height);
         	mm_buf->stride_height[1] = GST_ROUND_UP_16(height >> 1);
@@ -954,10 +978,10 @@ static GstMemory *_get_zero_copy_data(GstCameraSrc *camerasrc, guint32 index)
 #ifdef USE_NATIVE_DRM_BUFFER
 	mm_buf->type = MM_VIDEO_BUFFER_TYPE_GEM;
 	mm_buf->data[0] = camerasrc->vaddrs[index];
-	/* mm_buf->handle.gem[0] = camerasrc->gem_fds[index]; */
 	if (camerasrc->flinks[index] < 0) {
-		camerasrc->flinks[index] = get_flink_name(camerasrc->drm_fd,
-							  camerasrc->gem_fds[index]);
+		camerasrc->flinks[index] =
+			get_flink_name(camerasrc->drm_fd,
+				       camerasrc->gem_fds[index]);
 	}
 	mm_buf->handle.gem[0] = camerasrc->flinks[index];
 	mm_buf->handle_num = 1;
@@ -969,8 +993,9 @@ static GstMemory *_get_zero_copy_data(GstCameraSrc *camerasrc, guint32 index)
 	mm_buf->width[0] = camerasrc->width;
 	mm_buf->height[0] = camerasrc->height;
 	mm_buf->size[0] = camerasrc->buffer_size;
-	/* FIXME: currently test only YUV420 format */
-	mm_buf->format = _get_mm_pixel_format(camerasrc, camerasrc->pixel_format);
+
+	mm_buf->format = _get_mm_pixel_format(camerasrc,
+					      camerasrc->pixel_format);
 	_set_format_planes(camerasrc, camerasrc->pixel_format, mm_buf);
 
 	meta = gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY,
@@ -991,17 +1016,41 @@ static GstFlowReturn _read_preview(GstCameraSrc *camerasrc, GstBuffer **buffer)
 	GstCameraBuffer *vid_buf = NULL;
 	GstMemory *mem_camerabuf = NULL;
 	GstMemory *mem_zerocopy_data = NULL;
+	struct timeval timestamp;
+	guint num_queued;
 
 	GST_DEBUG_OBJECT(camerasrc, "camerasrc dequeue buffer");
-	ret = nx_v4l2_dqbuf(camerasrc->clipper_video_fd, nx_clipper_video, 1,
-			    &v4l2_buffer_index);
+
+	num_queued = g_atomic_int_get(&camerasrc->num_queued);
+	GST_OBJECT_LOCK(camerasrc);
+	while (num_queued < 2) {
+		g_cond_wait(&camerasrc->empty_cond,
+			    GST_OBJECT_GET_LOCK(camerasrc));
+		num_queued = g_atomic_int_get(&camerasrc->num_queued);
+		if (camerasrc->is_stopping)
+			break;
+	}
+	GST_OBJECT_UNLOCK(camerasrc);
+
+	if (camerasrc->is_stopping) {
+		camerasrc->is_stopping = FALSE;
+		GST_INFO_OBJECT(camerasrc, "%s --> stopping", __func__);
+		return GST_FLOW_EOS;
+	}
+
+	ret = nx_v4l2_dqbuf_with_timestamp(camerasrc->clipper_video_fd,
+					   nx_clipper_video, 1,
+					   &v4l2_buffer_index, &timestamp);
 	if (ret) {
 		GST_ERROR_OBJECT(camerasrc, "dq error");
 		return GST_FLOW_ERROR;
 	}
 
+	g_atomic_int_add(&camerasrc->num_queued, -1);
+
 	vid_buf = _camerasrc_buffer_new(camerasrc);
 	vid_buf->v4l2_buffer_index = v4l2_buffer_index;
+	/* _get_timeinfo_with_timestamp(camerasrc, vid_buf->buffer, &timestamp); */
 	_get_timeinfo(camerasrc, vid_buf->buffer);
 
 	mem_zerocopy_data = _get_zero_copy_data(camerasrc, v4l2_buffer_index);
@@ -1026,6 +1075,8 @@ static GstFlowReturn _read_preview(GstCameraSrc *camerasrc, GstBuffer **buffer)
 
 	gst_buffer_add_mmvideobuffer_meta(vid_buf->buffer, 0);
 	*buffer = vid_buf->buffer;
+
+	GST_INFO_OBJECT(camerasrc, "send buffer %d", v4l2_buffer_index);
 
 	return GST_FLOW_OK;
 
@@ -1088,14 +1139,39 @@ static GstFlowReturn _read_preview_mmap(GstCameraSrc *camerasrc,
 	gint stride[3] = {0, };
 	int format = 0;
 	int plane_num = 0;
+	struct timeval timestamp;
+	guint num_queued;
 
 	GST_DEBUG_OBJECT(camerasrc, "camerasrc dequeue buffer");
-	ret = nx_v4l2_dqbuf_mmap(camerasrc->clipper_video_fd, nx_clipper_video,
-			    &v4l2_buffer_index);
+
+	num_queued = g_atomic_int_get(&camerasrc->num_queued);
+	GST_OBJECT_LOCK(camerasrc);
+	while (num_queued < 2) {
+		g_cond_wait(&camerasrc->empty_cond,
+			    GST_OBJECT_GET_LOCK(camerasrc));
+		num_queued = g_atomic_int_get(&camerasrc->num_queued);
+		if (camerasrc->is_stopping)
+			break;
+	}
+	GST_OBJECT_UNLOCK(camerasrc);
+
+	if (camerasrc->is_stopping) {
+		camerasrc->is_stopping = FALSE;
+		GST_INFO_OBJECT(camerasrc, "%s --> stopping", __func__);
+		return GST_FLOW_EOS;
+	}
+
+	ret = nx_v4l2_dqbuf_mmap_with_timestamp(camerasrc->clipper_video_fd,
+						nx_clipper_video,
+						&v4l2_buffer_index, &timestamp);
 	if (ret) {
 		GST_ERROR_OBJECT(camerasrc, "dq error");
+		if (errno == EPIPE)
+			return GST_FLOW_EOS;
 		return GST_FLOW_ERROR;
 	}
+
+	g_atomic_int_add(&camerasrc->num_queued, -1);
 
 	data = (unsigned char *)camerasrc->vaddrs[v4l2_buffer_index];
 	length = camerasrc->buffer_length[v4l2_buffer_index];
@@ -1128,6 +1204,7 @@ static GstFlowReturn _read_preview_mmap(GstCameraSrc *camerasrc,
 		goto ERROR;
 	}
 
+	/* _get_timeinfo_with_timestamp(camerasrc, gstbuf, &timestamp); */
 	_get_timeinfo(camerasrc, gstbuf);
 
 	gst_buffer_append_memory(gstbuf, gstmem);
@@ -1194,8 +1271,7 @@ _set_pixel_format(guint32 format, gchar *format_string)
 	}
 }
 
-static GstCaps*
-_set_caps_init(GstCameraSrc *camerasrc)
+static GstCaps* _set_caps_init(GstCameraSrc *camerasrc)
 {
 	GstCaps *caps = NULL;
 	gchar format[10] = {0,};
@@ -1209,17 +1285,20 @@ _set_caps_init(GstCameraSrc *camerasrc)
 		"width", G_TYPE_INT, camerasrc->width,
 		"height", G_TYPE_INT, camerasrc->height,
 		NULL);
-       	if(caps != NULL)
+	if(caps != NULL)
 		camerasrc->caps = gst_caps_copy(caps);
 
 	if(camerasrc->caps) {
-		GST_INFO_OBJECT(camerasrc, "new caps %" GST_PTR_FORMAT, camerasrc->caps);
-		GST_INFO_OBJECT(camerasrc, "cap size = %d ", gst_caps_get_size(camerasrc->caps));
+		GST_INFO_OBJECT(camerasrc, "new caps %" GST_PTR_FORMAT,
+				camerasrc->caps);
+		GST_INFO_OBJECT(camerasrc, "cap size = %d ",
+				gst_caps_get_size(camerasrc->caps));
 	}
 
 	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 	return caps;
 }
+
 /* gobject_class methods */
 static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 				       const GValue *value, GParamSpec *pspec)
@@ -1307,7 +1386,8 @@ static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 		break;
 	case ARG_FORMAT:
 		strcpy(pixel_format, g_value_dup_string(value));
-                if(!_get_pixel_format(MAKE_FOURCC_FROM_STRING(pixel_format),&camerasrc->pixel_format)) {
+                if(!_get_pixel_format(MAKE_FOURCC_FROM_STRING(pixel_format),
+				      &camerasrc->pixel_format)) {
                         GST_ERROR_OBJECT(camerasrc,
                                          "failed to get pixel format");
                 }
@@ -1384,7 +1464,15 @@ static void gst_camerasrc_get_property(GObject *object, guint prop_id,
 
 static void gst_camerasrc_finalize(GObject *object)
 {
-	/* TODO */
+	GstCameraSrc *camerasrc;
+
+	GST_ERROR_OBJECT(camerasrc, "ENTERED");
+
+	camerasrc = GST_CAMERASRC(object);
+
+	g_cond_clear(&camerasrc->empty_cond);
+
+	GST_ERROR_OBJECT(camerasrc, "LEAVED");
 }
 
 /* basesrc_class methods */
@@ -1432,15 +1520,14 @@ static GstCaps *gst_camerasrc_get_caps(GstBaseSrc *src, GstCaps *filter)
 
 	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
 
-	GST_INFO_OBJECT(camerasrc, "this caps: %" GST_PTR_FORMAT, camerasrc->caps);
+	GST_INFO_OBJECT(camerasrc, "this caps: %" GST_PTR_FORMAT,
+			camerasrc->caps);
+
 	if((camerasrc->caps==NULL) || (gst_caps_is_empty(camerasrc->caps)))
 		caps = _set_caps_init(camerasrc);
 	else
 		caps = gst_caps_copy(camerasrc->caps);
-	#if 0
-		caps = gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_SRC_PAD
-								(camerasrc)));
-	#endif
+
 	if (caps && filter)
 		gst_caps_take(&caps, gst_caps_intersect(caps, filter));
 
@@ -1464,7 +1551,8 @@ static gboolean gst_camerasrc_set_caps(GstBaseSrc *src, GstCaps *caps)
 		GST_ERROR_OBJECT(camerasrc, "can't get capture information from caps %p", caps);
 		return FALSE;
 	}
-	GST_DEBUG_OBJECT(camerasrc, " fixed caps : %" GST_PTR_FORMAT, camerasrc->caps);
+	GST_DEBUG_OBJECT(camerasrc, " fixed caps : %" GST_PTR_FORMAT,
+			 camerasrc->caps);
 
 	camerasrc->buffer_size = size;
 
@@ -1477,11 +1565,11 @@ static gboolean gst_camerasrc_set_caps(GstBaseSrc *src, GstCaps *caps)
 	ret = gst_pad_push_event(GST_BASE_SRC_PAD(src),
 				 gst_event_new_caps(caps));
 
-	GST_INFO_OBJECT(camerasrc, "LEAVED");
+	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 
 	return ret;
 #else
-	GST_INFO_OBJECT(camerasrc, "LEAVED");
+	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 
 	return TRUE;
 #endif
@@ -1843,6 +1931,9 @@ static void gst_camerasrc_init(GstCameraSrc *camerasrc)
 	/* buffer */
 	camerasrc->buffer_count = 0;
 	camerasrc->buffer_size = 0;
+	camerasrc->num_queued = 0;
+	camerasrc->is_stopping = FALSE;
+	g_cond_init(&camerasrc->empty_cond);
 
 	camerasrc->caps = NULL;
 
@@ -1882,14 +1973,18 @@ static void gst_camerasrc_buffer_finalize(GstCameraBuffer *buffer)
 
 	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
 
-	GST_DEBUG_OBJECT(camerasrc, "buffer index: %d", index);
+	GST_INFO_OBJECT(camerasrc, "buffer index: %d", index);
 
 	ret = nx_v4l2_qbuf(camerasrc->clipper_video_fd, nx_clipper_video, 1,
 			   index,
 			   &camerasrc->dma_fds[index],
 			   (int *)&camerasrc->buffer_size);
-	if (ret)
+	if (ret) {
 		GST_ERROR_OBJECT(camerasrc, "q error");
+	} else {
+		g_atomic_int_add(&camerasrc->num_queued, 1);
+		g_cond_signal(&camerasrc->empty_cond);
+	}
 
 	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 }

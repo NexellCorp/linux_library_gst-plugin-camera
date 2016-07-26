@@ -117,6 +117,9 @@ struct _GstCameraSrc {
 	/* buffer */
 	guint32 buffer_count;
 	guint32 buffer_size;
+	guint num_queued;
+	GCond empty_cond;
+	gboolean is_stopping;
 
 	GstCaps *caps;
 #ifdef USE_NATIVE_DRM_BUFFER
