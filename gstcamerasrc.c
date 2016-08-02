@@ -40,6 +40,7 @@
 #include <glib-object.h>
 
 #include <mm_types.h>
+#include <gstmmvideobuffermeta.h>
 
 #include "media-bus-format.h"
 
