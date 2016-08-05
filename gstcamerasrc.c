@@ -1116,8 +1116,12 @@ static void _destroy_mmap_buffer(gpointer data)
 		ret = nx_v4l2_qbuf_mmap(camerasrc->clipper_video_fd,
 					nx_clipper_video,
 					index);
-		if (ret)
+		if (ret) {
 			GST_ERROR_OBJECT(camerasrc, "q error");
+		} else {
+			g_atomic_int_add(&camerasrc->num_queued, 1);
+			g_cond_signal(&camerasrc->empty_cond);
+		}
 
 		free(meta);
 
