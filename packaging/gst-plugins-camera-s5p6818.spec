@@ -1,7 +1,7 @@
 Name:    gst-plugins-camera-s5p6818
 Version: 0.0.1
 Release: 0
-License: Apache 2.0
+License: LGPLv2+
 Summary: gstreamer plugin camera
 Group: Development/Libraries
 Source:  %{name}-%{version}.tar.gz
@@ -39,5 +39,6 @@ make install DESTDIR=%{buildroot}
 find %{buildroot} -type f -name "*.la" -delete
 
 %files
+%license LICENSE.LGPLv2+
 %{_libdir}/gstreamer-1.0/libgstnxcamerasrc.so
 %{_libdir}/gstreamer-1.0/libgstnxcamerasrc.so.*
