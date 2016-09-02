@@ -1390,7 +1390,7 @@ static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 				camerasrc->buffer_type);
 		break;
 	case ARG_FORMAT:
-		strcpy(pixel_format, g_value_dup_string(value));
+		strncpy(pixel_format, g_value_get_string(value),sizeof(pixel_format));
                 if(!_get_pixel_format(MAKE_FOURCC_FROM_STRING(pixel_format),
 				      &camerasrc->pixel_format)) {
                         GST_ERROR_OBJECT(camerasrc,
