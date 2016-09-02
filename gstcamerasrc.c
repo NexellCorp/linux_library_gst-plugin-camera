@@ -1377,6 +1377,7 @@ static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 		camerasrc->capture_provide_exif = g_value_get_boolean(value);
 		GST_INFO_OBJECT(camerasrc, "Set CAMERA_CAPTURE_PROVIDE_EXIF: %d"
 				, camerasrc->capture_provide_exif);
+		break;
 	case ARG_VFLIP:
 		camerasrc->vflip = g_value_get_boolean(value);
 		GST_INFO_OBJECT(camerasrc, "Set VFLIP: %d", camerasrc->vflip);
