@@ -1274,6 +1274,7 @@ _set_pixel_format(guint32 format, gchar *format_string)
 	default:
 		break;
 	}
+	return 0;
 }
 
 static GstCaps* _set_caps_init(GstCameraSrc *camerasrc)
