@@ -85,6 +85,8 @@ enum {
 
 	/* format */
 	ARG_FORMAT,
+	/* framerate */
+	ARG_FRAMERATE,
 
 	ARG_NUM,
 };
@@ -1311,10 +1313,10 @@ static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 {
 	GstCameraSrc *camerasrc = NULL;
 	gchar pixel_format[10] = {0,};
+	int fps_n, fps_d;
 
 	g_return_if_fail(GST_IS_CAMERASRC(object));
 	camerasrc = GST_CAMERASRC(object);
-
 	switch (prop_id) {
 	case ARG_CAMERA_ID:
 		camerasrc->module = g_value_get_uint(value);
@@ -1401,6 +1403,12 @@ static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 		GST_INFO_OBJECT(camerasrc, "Set format: %s",
 				pixel_format);
 		break;
+	case ARG_FRAMERATE:
+		fps_n = gst_value_get_fraction_numerator(value);
+		fps_d = gst_value_get_fraction_denominator(value);
+		camerasrc->fps = fps_n/fps_d;
+		GST_INFO_OBJECT(camerasrc, "SET FRAMERATE :  %d ",camerasrc->fps);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -1462,6 +1470,9 @@ static void gst_camerasrc_get_property(GObject *object, guint prop_id,
 		g_value_set_uint(value, camerasrc->buffer_type);
 		break;
 	case ARG_FORMAT:
+		break;
+	case ARG_FRAMERATE:
+		g_value_set_uint(value, camerasrc->fps);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1875,7 +1886,19 @@ static void gst_camerasrc_class_init(GstCameraSrcClass *klass)
 							  "I420",
 							  G_PARAM_READWRITE
 							  /*G_PARAM_STATIC_STRINGS*/));
-
+	g_object_class_install_property(gobject_class,
+					ARG_FRAMERATE,
+					gst_param_spec_fraction("framerate",
+							      "fps",
+							      "framer per second's",
+							      1/*minimum num */,
+							      1/*minimum divide num */,
+							      DEF_FPS /*maximum num */,
+							      1 /* maxium devide num*/,
+							      DEF_FPS /* default value */,
+							      1 /* default devide value */,
+							     (GParamFlags) (G_PARAM_READWRITE |
+							      G_PARAM_STATIC_STRINGS)));
 	/* element_class overriding */
 	gst_element_class_add_pad_template(element_class,
 				gst_static_pad_template_get(&src_factory));
