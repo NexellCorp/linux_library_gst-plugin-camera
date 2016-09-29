@@ -576,7 +576,7 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 	int ret;
 	guint32 bus_format;
 	gboolean result;
-
+	struct v4l2_streamparm s_param;
 	module = camerasrc->module;
 
 	result = _get_frame_size(camerasrc, camerasrc->pixel_format,
@@ -720,6 +720,12 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 		return FALSE;
 	}
 
+	s_param.parm.capture.capability = V4L2_CAP_TIMEPERFRAME;
+	s_param.parm.capture.capturemode = 0;
+	s_param.parm.capture.timeperframe.denominator = camerasrc->fps;
+	s_param.parm.capture.timeperframe.numerator = 1;
+	s_param.parm.capture.readbuffers = 1;
+	nx_v4l2_set_parm(clipper_video_fd, nx_clipper_video, &s_param);
 	camerasrc->sensor_fd = sensor_fd;
 	camerasrc->clipper_subdev_fd = clipper_subdev_fd;
 	if (is_mipi)
