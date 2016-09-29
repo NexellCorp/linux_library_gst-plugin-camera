@@ -1478,7 +1478,7 @@ static void gst_camerasrc_get_property(GObject *object, guint prop_id,
 	case ARG_FORMAT:
 		break;
 	case ARG_FRAMERATE:
-		g_value_set_uint(value, camerasrc->fps);
+		gst_value_set_fraction(value, camerasrc->fps, 1);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
