@@ -413,12 +413,13 @@ static gboolean _create_buffer(GstCameraSrc *camerasrc)
 
 static void _destroy_buffer(GstCameraSrc *camerasrc)
 {
+	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
 #ifdef USE_NATIVE_DRM_BUFFER
 	int i;
 
 	for (i = 0; i < camerasrc->buffer_count; i++) {
 		close(camerasrc->dma_fds[i]);
-		close(camerasrc->gem_fds[i]);
+		free_gem(camerasrc->drm_fd, camerasrc->gem_fds[i]);
 		camerasrc->dma_fds[i] = -1;
 		camerasrc->gem_fds[i] = -1;
 	}
@@ -437,12 +438,14 @@ static void _destroy_buffer(GstCameraSrc *camerasrc)
 		buf->vaddr = NULL;
 	}
 #endif
+	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 }
 
 static void _unmap_buffer(GstCameraSrc *camerasrc)
 {
 	int i;
 
+	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
 	for (i = 0; i < camerasrc->buffer_count; i++) {
 		if (camerasrc->vaddrs[i]) {
 			munmap(camerasrc->vaddrs[i],
@@ -450,6 +453,7 @@ static void _unmap_buffer(GstCameraSrc *camerasrc)
 			camerasrc->vaddrs[i] = NULL;
 		}
 	}
+	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 }
 
 static gboolean _start_preview(GstCameraSrc *camerasrc)
@@ -555,14 +559,42 @@ static gboolean _start_preview_mmap(GstCameraSrc *camerasrc)
 
 static void _stop_preview(GstCameraSrc *camerasrc)
 {
-	nx_v4l2_streamoff(camerasrc->clipper_video_fd, nx_clipper_video);
-	nx_v4l2_reqbuf(camerasrc->clipper_video_fd, nx_clipper_video, 0);
+	int ret;
+
+	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
+	ret = nx_v4l2_streamoff(camerasrc->clipper_video_fd, nx_clipper_video);
+	if (ret) {
+		GST_ERROR_OBJECT(camerasrc,
+		"failed to stream off %d \n",ret);
+	}
+	#if 0
+	ret = nx_v4l2_reqbuf(camerasrc->clipper_video_fd, nx_clipper_video, 0);
+	if (ret) {
+		GST_ERROR_OBJECT(camerasrc,
+		"failed to req buf : %d \n",ret);
+	}
+	#endif
+	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 }
 
 static void _stop_preview_mmap(GstCameraSrc *camerasrc)
 {
-	nx_v4l2_streamoff_mmap(camerasrc->clipper_video_fd, nx_clipper_video);
-	nx_v4l2_reqbuf_mmap(camerasrc->clipper_video_fd, nx_clipper_video, 0);
+	int ret;
+
+	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
+	ret = nx_v4l2_streamoff_mmap(camerasrc->clipper_video_fd, nx_clipper_video);
+	if (ret) {
+		GST_ERROR_OBJECT(camerasrc,
+		"failed to stream off %d \n",ret);
+	}
+	#if 0
+	ret = nx_v4l2_reqbuf_mmap(camerasrc->clipper_video_fd, nx_clipper_video, 0);
+	if (ret) {
+		GST_ERROR_OBJECT(camerasrc,
+		"failed to req buf : %d \n",ret);
+	}
+	#endif
+	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 }
 
 static gboolean _camera_start(GstCameraSrc *camerasrc)
@@ -750,8 +782,8 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 
 static gboolean _camera_stop(GstCameraSrc *camerasrc)
 {
+	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
 	camerasrc->is_stopping = TRUE;
-	g_cond_signal(&camerasrc->empty_cond);
 
 	if (camerasrc->buffer_type == BUFFER_TYPE_GEM) {
 		_stop_preview(camerasrc);
@@ -760,6 +792,8 @@ static gboolean _camera_stop(GstCameraSrc *camerasrc)
 		_stop_preview_mmap(camerasrc);
 		_unmap_buffer(camerasrc);
 	}
+	g_cond_signal(&camerasrc->empty_cond);
+	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 	return TRUE;
 }
 
@@ -1162,9 +1196,9 @@ static GstFlowReturn _read_preview_mmap(GstCameraSrc *camerasrc,
 	while (num_queued < 2) {
 		g_cond_wait(&camerasrc->empty_cond,
 			    GST_OBJECT_GET_LOCK(camerasrc));
-		num_queued = g_atomic_int_get(&camerasrc->num_queued);
 		if (camerasrc->is_stopping)
 			break;
+		num_queued = g_atomic_int_get(&camerasrc->num_queued);
 	}
 	GST_OBJECT_UNLOCK(camerasrc);
 
