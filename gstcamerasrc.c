@@ -438,6 +438,10 @@ static void _destroy_buffer(GstCameraSrc *camerasrc)
 		buf->vaddr = NULL;
 	}
 #endif
+	if (camerasrc->drm_fd) {
+		close(camerasrc->drm_fd);
+		camerasrc->drm_fd = -1;
+	}
 	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 }
 
@@ -567,13 +571,11 @@ static void _stop_preview(GstCameraSrc *camerasrc)
 		GST_ERROR_OBJECT(camerasrc,
 		"failed to stream off %d \n",ret);
 	}
-	#if 0
 	ret = nx_v4l2_reqbuf(camerasrc->clipper_video_fd, nx_clipper_video, 0);
 	if (ret) {
 		GST_ERROR_OBJECT(camerasrc,
 		"failed to req buf : %d \n",ret);
 	}
-	#endif
 	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 }
 
@@ -587,13 +589,11 @@ static void _stop_preview_mmap(GstCameraSrc *camerasrc)
 		GST_ERROR_OBJECT(camerasrc,
 		"failed to stream off %d \n",ret);
 	}
-	#if 0
 	ret = nx_v4l2_reqbuf_mmap(camerasrc->clipper_video_fd, nx_clipper_video, 0);
 	if (ret) {
 		GST_ERROR_OBJECT(camerasrc,
 		"failed to req buf : %d \n",ret);
 	}
-	#endif
 	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 }
 
@@ -1524,13 +1524,13 @@ static void gst_camerasrc_finalize(GObject *object)
 {
 	GstCameraSrc *camerasrc;
 
-	GST_ERROR_OBJECT(camerasrc, "ENTERED");
+	GST_DEBUG_OBJECT(camerasrc, "ENTERED");
 
 	camerasrc = GST_CAMERASRC(object);
 
 	g_cond_clear(&camerasrc->empty_cond);
 
-	GST_ERROR_OBJECT(camerasrc, "LEAVED");
+	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 }
 
 /* basesrc_class methods */
