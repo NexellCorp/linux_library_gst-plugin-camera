@@ -792,6 +792,15 @@ static gboolean _camera_stop(GstCameraSrc *camerasrc)
 		_stop_preview_mmap(camerasrc);
 		_unmap_buffer(camerasrc);
 	}
+	if (camerasrc->csi_subdev_fd)
+		close(camerasrc->csi_subdev_fd);
+	if (camerasrc->clipper_subdev_fd)
+		close(camerasrc->clipper_subdev_fd);
+	if (camerasrc->clipper_video_fd)
+		close(camerasrc->clipper_video_fd);
+	if (camerasrc->sensor_fd)
+		close(camerasrc->sensor_fd);
+	nx_v4l2_cleanup();
 	g_cond_signal(&camerasrc->empty_cond);
 	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 	return TRUE;
