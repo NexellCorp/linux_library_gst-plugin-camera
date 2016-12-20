@@ -1673,6 +1673,8 @@ static gboolean gst_camerasrc_negotiate(GstBaseSrc *src)
 				 icaps);
 		if (icaps)
 			caps = _find_best_match_caps(peercaps, icaps);
+
+		gst_caps_unref(thiscaps);
 	} else {
 		caps = thiscaps;
 	}
