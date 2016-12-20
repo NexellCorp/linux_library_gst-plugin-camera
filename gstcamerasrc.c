@@ -2065,6 +2065,9 @@ static void gst_camerasrc_buffer_finalize(GstCameraBuffer *buffer)
 		g_cond_signal(&camerasrc->empty_cond);
 	}
 
+	if (buffer)
+		free(buffer);
+
 	GST_DEBUG_OBJECT(camerasrc, "LEAVED");
 }
 
