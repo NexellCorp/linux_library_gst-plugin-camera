@@ -1,5 +1,5 @@
 Name:    gst-plugins-camera-s5p6818
-Version: 1.0.2
+Version: 1.0.3
 Release: 1
 License: LGPLv2+
 Summary: gstreamer plugin camera
