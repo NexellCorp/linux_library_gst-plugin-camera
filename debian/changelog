@@ -1,3 +1,16 @@
+gst-plugins-camera-s5p6818 (1.0.4) unstable; urgency=medium
+
+  * make buffer-count configurable
+  * change maximum resolution
+
+ -- Sooman Jeong <sm5.jeong@smart>  Thu, 01 Feb 2018 17:22:23 +0900
+
+gst-plugins-camera-s5p6818 (1.0.3) unstable; urgency=medium
+
+  * fix bugs (memory leak, unclosed file)
+
+ -- Sooman Jeong <sm5.jeong@smart>  Thu, 01 Feb 2018 17:21:28 +0900
+
 gst-plugins-camera-s5p6818 (1.0.2) unstable; urgency=medium
 
   * Initial release
