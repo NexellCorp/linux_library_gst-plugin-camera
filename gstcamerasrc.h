@@ -56,7 +56,7 @@ struct _GstCameraBuffer {
 #define GST_IS_CAMERASRC(obj)          (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_CAMERASRC))
 #define GST_IS_CAMERASRC_CLASS(klass)    (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_CAMERASRC))
 
-#define MAX_BUFFER_COUNT		12
+#define MAX_BUFFER_COUNT		32
 
 /* FIXME: Currently I am following gst-plugins-camera-v4 model of samsung
  * But, Some codes seem to be ugly,

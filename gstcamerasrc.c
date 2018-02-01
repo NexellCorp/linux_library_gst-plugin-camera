@@ -87,6 +87,8 @@ enum {
 	ARG_FORMAT,
 	/* framerate */
 	ARG_FRAMERATE,
+	/* buffer conut */
+	ARG_BUFCOUNT,
 
 	ARG_NUM,
 };
@@ -765,8 +767,6 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 	camerasrc->clipper_video_fd = clipper_video_fd;
 
 	camerasrc->is_mipi = is_mipi;
-
-	camerasrc->buffer_count = DEF_BUFFER_COUNT;
 
 	if (camerasrc->buffer_type == BUFFER_TYPE_GEM) {
 		result = _create_buffer(camerasrc);
@@ -1458,6 +1458,10 @@ static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 		camerasrc->fps = fps_n/fps_d;
 		GST_INFO_OBJECT(camerasrc, "SET FRAMERATE :  %d ",camerasrc->fps);
 		break;
+	case ARG_BUFCOUNT:
+		camerasrc->buffer_count = g_value_get_uint(value);
+		GST_INFO_OBJECT(camerasrc, "Set BUFCOUNT: %d", camerasrc->buffer_count);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -1522,6 +1526,9 @@ static void gst_camerasrc_get_property(GObject *object, guint prop_id,
 		break;
 	case ARG_FRAMERATE:
 		gst_value_set_fraction(value, camerasrc->fps, 1);
+		break;
+	case ARG_BUFCOUNT:
+		g_value_set_uint(value, camerasrc->buffer_count);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1950,6 +1957,15 @@ static void gst_camerasrc_class_init(GstCameraSrcClass *klass)
 							      1 /* default devide value */,
 							     (GParamFlags) (G_PARAM_READWRITE |
 							      G_PARAM_STATIC_STRINGS)));
+	g_object_class_install_property(gobject_class,
+					ARG_BUFCOUNT,
+					g_param_spec_uint("buffer-count",
+							  "Buffer count",
+							  "Number of buffers to request",
+							  DEF_BUFFER_COUNT,
+							  MAX_BUFFER_COUNT,
+							  DEF_BUFFER_COUNT,
+							  G_PARAM_READWRITE));
 	/* element_class overriding */
 	gst_element_class_add_pad_template(element_class,
 				gst_static_pad_template_get(&src_factory));
@@ -2010,7 +2026,7 @@ static void gst_camerasrc_init(GstCameraSrc *camerasrc)
 	camerasrc->buffer_type = BUFFER_TYPE_GEM;
 
 	/* buffer */
-	camerasrc->buffer_count = 0;
+	camerasrc->buffer_count = DEF_BUFFER_COUNT;
 	camerasrc->buffer_size = 0;
 	camerasrc->num_queued = 0;
 	camerasrc->is_stopping = FALSE;
