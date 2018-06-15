@@ -1,3 +1,9 @@
+gst-plugins-camera-s5p6818 (1.0.5) unstable; urgency=medium
+
+  * add test_pattern property
+
+ -- Sooman Jeong <sm5.jeong@smart>  Fri, 15 Jun 2018 17:25:03 +0900
+
 gst-plugins-camera-s5p6818 (1.0.4) unstable; urgency=medium
 
   * make buffer-count configurable
