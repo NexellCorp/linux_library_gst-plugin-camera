@@ -91,6 +91,7 @@ struct _GstCameraSrc {
 	guint32 height;
 	guint32 pixel_format;
 	guint32 fps;
+	gboolean test_pattern;
 
 	/* crop attribute */
 	guint32 crop_x;

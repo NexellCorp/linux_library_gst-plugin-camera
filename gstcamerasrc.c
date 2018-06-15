@@ -79,6 +79,7 @@ enum {
 	/* etc */
 	ARG_VFLIP,
 	ARG_HFLIP,
+	ARG_TEST_PATTERN,
 
 	/* buffer type */
 	ARG_BUFFER_TYPE,
@@ -499,6 +500,12 @@ static gboolean _start_preview(GstCameraSrc *camerasrc)
 	if (ret) {
 		GST_ERROR_OBJECT(camerasrc, "failed to streamon");
 		return FALSE;
+	}
+
+	ret = nx_v4l2_set_ctrl(camerasrc->clipper_video_fd, nx_clipper_video,
+		V4L2_CID_TEST_PATTERN, camerasrc->test_pattern);
+	if (ret) {
+		GST_ERROR_OBJECT(camerasrc, "failed to set test pattern");
 	}
 
 	return TRUE;
@@ -1437,6 +1444,10 @@ static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 		camerasrc->hflip = g_value_get_boolean(value);
 		GST_INFO_OBJECT(camerasrc, "Set HFLIP: %d", camerasrc->hflip);
 		break;
+	case ARG_TEST_PATTERN:
+		camerasrc->test_pattern = g_value_get_boolean(value);
+		GST_INFO_OBJECT(camerasrc, "Set TEST_PATTERN: %d", camerasrc->test_pattern);
+		break;
 	case ARG_BUFFER_TYPE:
 		camerasrc->buffer_type = g_value_get_uint(value);
 		GST_INFO_OBJECT(camerasrc, "Set BUFFER_TYPE: %u",
@@ -1518,6 +1529,9 @@ static void gst_camerasrc_get_property(GObject *object, guint prop_id,
 		break;
 	case ARG_HFLIP:
 		g_value_set_boolean(value, camerasrc->hflip);
+		break;
+	case ARG_TEST_PATTERN:
+		g_value_set_boolean(value, camerasrc->test_pattern);
 		break;
 	case ARG_BUFFER_TYPE:
 		g_value_set_uint(value, camerasrc->buffer_type);
@@ -1926,7 +1940,14 @@ static void gst_camerasrc_class_init(GstCameraSrcClass *klass)
 							     0,
 							     G_PARAM_READWRITE |
 							     G_PARAM_STATIC_STRINGS));
-
+	g_object_class_install_property(gobject_class,
+					ARG_TEST_PATTERN,
+					g_param_spec_boolean("test-pattern",
+							     "Test Pattern",
+							     "Enable Test Pattern",
+							     0,
+							     G_PARAM_READWRITE |
+							     G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class,
 					ARG_BUFFER_TYPE,
 					g_param_spec_uint("buffer-type",
@@ -2011,6 +2032,7 @@ static void gst_camerasrc_init(GstCameraSrc *camerasrc)
 	camerasrc->height = DEF_CAPTURE_HEIGHT;
 	camerasrc->pixel_format = DEF_PIXEL_FORMAT;
 	camerasrc->fps = DEF_FPS;
+	camerasrc->test_pattern = FALSE;
 
 	/* crop attribute */
 	camerasrc->crop_x = 0;
