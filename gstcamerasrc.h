@@ -76,6 +76,7 @@ struct _GstCameraSrc {
 	GstPushSrc parent;
 
 	guint32 module;
+	guint32 type;
 
 	int sensor_fd;
 	int clipper_subdev_fd;
@@ -92,6 +93,7 @@ struct _GstCameraSrc {
 	guint32 pixel_format;
 	guint32 fps;
 	gboolean test_pattern;
+	guint32 bus_f;
 
 	/* crop attribute */
 	guint32 crop_x;

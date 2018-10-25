@@ -90,6 +90,10 @@ enum {
 	ARG_FRAMERATE,
 	/* buffer conut */
 	ARG_BUFCOUNT,
+	/* camera type */
+	ARG_CAMERA_TYPE,
+	/* bus format */
+	ARG_BUS_FORMAT,
 
 	ARG_NUM,
 };
@@ -157,6 +161,37 @@ static gboolean _get_frame_size(GstCameraSrc *camerasrc, guint32 fourcc,
 	case V4L2_PIX_FMT_YUV420:
 	case V4L2_PIX_FMT_YVU420:
 		*size = y_size + 2 * GST_ROUND_UP_16(y_stride >> 1)
+		* GST_ROUND_UP_16(height >> 1);
+		break;
+	case V4L2_PIX_FMT_YUYV:
+	case V4L2_PIX_FMT_YVYU:
+	case V4L2_PIX_FMT_UYVY:
+	case V4L2_PIX_FMT_VYUY:
+		*size = y_size << 1;
+		break;
+	case V4L2_PIX_FMT_NV21:
+	case V4L2_PIX_FMT_NV12:
+		*size = y_size + y_stride * GST_ROUND_UP_16(height >> 1);
+		break;
+	default:
+		break;
+	}
+	return TRUE;
+}
+
+static gboolean _get_frame_size_interlaced(GstCameraSrc *camerasrc, guint32 fourcc,
+				int width, int height, guint *size)
+{
+	guint y_size;
+	guint y_stride;
+
+	y_stride = GST_ROUND_UP_128(width);
+	y_size = y_stride * GST_ROUND_UP_16(height);
+
+	switch (fourcc) {
+	case V4L2_PIX_FMT_YUV420:
+	case V4L2_PIX_FMT_YVU420:
+		*size = y_size + 2 * GST_ROUND_UP_64(y_stride >> 1)
 		* GST_ROUND_UP_16(height >> 1);
 		break;
 	case V4L2_PIX_FMT_YUYV:
@@ -620,9 +655,16 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 	struct v4l2_streamparm s_param;
 	module = camerasrc->module;
 
-	result = _get_frame_size(camerasrc, camerasrc->pixel_format,
-				 camerasrc->width, camerasrc->height,
-				 &camerasrc->buffer_size);
+	if (camerasrc->type == V4L2_FIELD_INTERLACED)
+		result = _get_frame_size_interlaced(camerasrc,
+				camerasrc->pixel_format,
+				camerasrc->width, camerasrc->height,
+				&camerasrc->buffer_size);
+	else
+		result = _get_frame_size(camerasrc,
+				camerasrc->pixel_format,
+				camerasrc->width, camerasrc->height,
+				&camerasrc->buffer_size);
 	if (result == FALSE) {
 		GST_ERROR_OBJECT(camerasrc, "failed to get frame_size");
 		return result;
@@ -694,8 +736,23 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 		}
 	}
 
+
 	/* TODO: need property for bus format */
-	bus_format = MEDIA_BUS_FMT_YUYV8_2X8;
+	switch (camerasrc->bus_f) {
+	case 0:
+		bus_format = MEDIA_BUS_FMT_YUYV8_2X8;
+		break;
+	case 1:
+		bus_format = MEDIA_BUS_FMT_UYVY8_2X8;
+		break;
+	case 2:
+		bus_format = MEDIA_BUS_FMT_VYUY8_2X8;
+		break;
+	case 3:
+		bus_format = MEDIA_BUS_FMT_YVYU8_2X8;
+		break;
+	};
+
 	ret = nx_v4l2_set_format(sensor_fd, nx_sensor_subdev, camerasrc->width,
 				 camerasrc->height, bus_format);
 	if (ret) {
@@ -731,9 +788,9 @@ static gboolean _camera_start(GstCameraSrc *camerasrc)
 					      camerasrc->height,
 					      camerasrc->pixel_format);
 	else
-		ret = nx_v4l2_set_format(clipper_video_fd, nx_clipper_video,
+		ret = nx_v4l2_set_format_with_field(clipper_video_fd, nx_clipper_video,
 					 camerasrc->width, camerasrc->height,
-					 camerasrc->pixel_format);
+					 camerasrc->pixel_format, camerasrc->type);
 
 	if (ret) {
 		GST_ERROR_OBJECT(camerasrc,
@@ -987,7 +1044,10 @@ _set_format_planes(GstCameraSrc *camerasrc, guint32 format,
 	switch (format) {
 	case V4L2_PIX_FMT_YUV420:
 	case V4L2_PIX_FMT_YVU420:
-		pitch  = GST_ROUND_UP_32(width);
+		if (camerasrc->type == V4L2_FIELD_INTERLACED)
+			pitch  = GST_ROUND_UP_128(width);
+		else
+			pitch  = GST_ROUND_UP_32(width);
 		mm_buf->plane_num = 3;
                 mm_buf->stride_width[0] = pitch;
                 mm_buf->stride_width[1] =
@@ -1001,13 +1061,19 @@ _set_format_planes(GstCameraSrc *camerasrc, guint32 format,
 	case V4L2_PIX_FMT_YVYU:
 	case V4L2_PIX_FMT_UYVY:
 	case V4L2_PIX_FMT_VYUY:
-		pitch  = GST_ROUND_UP_32(width) * 2;
+		if (camerasrc->type == V4L2_FIELD_INTERLACED)
+			pitch  = GST_ROUND_UP_128(width);
+		else
+			pitch  = GST_ROUND_UP_32(width) * 2;
 		mm_buf->plane_num = 1;
 		mm_buf->stride_width[0] = pitch;
 		break;
 	case V4L2_PIX_FMT_NV21:
 	case V4L2_PIX_FMT_NV12:
-		pitch  = GST_ROUND_UP_32(width);
+		if (camerasrc->type == V4L2_FIELD_INTERLACED)
+			pitch  = GST_ROUND_UP_128(width);
+		else
+			pitch  = GST_ROUND_UP_32(width);
 		mm_buf->plane_num = 2;
 		mm_buf->stride_width[0] = pitch;
                 mm_buf->stride_width[1] = mm_buf->stride_width[0];
@@ -1472,6 +1538,19 @@ static void gst_camerasrc_set_property(GObject *object, guint prop_id,
 	case ARG_BUFCOUNT:
 		camerasrc->buffer_count = g_value_get_uint(value);
 		GST_INFO_OBJECT(camerasrc, "Set BUFCOUNT: %d", camerasrc->buffer_count);
+	case ARG_CAMERA_TYPE:
+		camerasrc->type = g_value_get_uint(value);
+		GST_INFO_OBJECT(camerasrc, "Set CAMERA_TYPE: %u",
+				camerasrc->type);
+		if (camerasrc->type)
+			camerasrc->type = V4L2_FIELD_INTERLACED;
+		else
+			camerasrc->type = V4L2_FIELD_ANY;
+		break;
+	case ARG_BUS_FORMAT:
+		camerasrc->bus_f = g_value_get_uint(value);
+		GST_INFO_OBJECT(camerasrc, "bus format : %u",
+				camerasrc->bus_f);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1986,6 +2065,23 @@ static void gst_camerasrc_class_init(GstCameraSrcClass *klass)
 							  DEF_BUFFER_COUNT,
 							  MAX_BUFFER_COUNT,
 							  DEF_BUFFER_COUNT,
+
+	g_object_class_install_property(gobject_class, ARG_CAMERA_TYPE,
+					g_param_spec_uint("camera-type",
+							  "Camera Type",
+							  "camera type value to check interlaced or not",
+							  0,
+							  2,
+							  0,
+							  G_PARAM_READWRITE));
+
+	g_object_class_install_property(gobject_class, ARG_BUS_FORMAT,
+					g_param_spec_uint("camera-bus-format",
+							  "Bus Format",
+							  "Bus Format for set format",
+							  0,
+							  3,
+							  0,
 							  G_PARAM_READWRITE));
 	/* element_class overriding */
 	gst_element_class_add_pad_template(element_class,
@@ -2017,6 +2113,7 @@ static void gst_camerasrc_init(GstCameraSrc *camerasrc)
 	GST_DEBUG("ENTERED");
 
 	camerasrc->module = 0;
+	camerasrc->type = 0;
 
 	camerasrc->sensor_fd = -1;
 	camerasrc->clipper_subdev_fd = -1;
@@ -2033,6 +2130,7 @@ static void gst_camerasrc_init(GstCameraSrc *camerasrc)
 	camerasrc->pixel_format = DEF_PIXEL_FORMAT;
 	camerasrc->fps = DEF_FPS;
 	camerasrc->test_pattern = FALSE;
+	camerasrc->bus_f = 0;
 
 	/* crop attribute */
 	camerasrc->crop_x = 0;
