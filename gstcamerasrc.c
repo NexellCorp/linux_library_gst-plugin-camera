@@ -2065,6 +2065,7 @@ static void gst_camerasrc_class_init(GstCameraSrcClass *klass)
 							  DEF_BUFFER_COUNT,
 							  MAX_BUFFER_COUNT,
 							  DEF_BUFFER_COUNT,
+							  G_PARAM_READWRITE));
 
 	g_object_class_install_property(gobject_class, ARG_CAMERA_TYPE,
 					g_param_spec_uint("camera-type",
