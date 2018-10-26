@@ -1062,7 +1062,7 @@ _set_format_planes(GstCameraSrc *camerasrc, guint32 format,
 	case V4L2_PIX_FMT_UYVY:
 	case V4L2_PIX_FMT_VYUY:
 		if (camerasrc->type == V4L2_FIELD_INTERLACED)
-			pitch  = GST_ROUND_UP_128(width);
+			pitch  = GST_ROUND_UP_128(width) * 2;
 		else
 			pitch  = GST_ROUND_UP_32(width) * 2;
 		mm_buf->plane_num = 1;
