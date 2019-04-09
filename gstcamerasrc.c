@@ -1623,6 +1623,12 @@ static void gst_camerasrc_get_property(GObject *object, guint prop_id,
 	case ARG_BUFCOUNT:
 		g_value_set_uint(value, camerasrc->buffer_count);
 		break;
+	case ARG_CAMERA_TYPE:
+		g_value_set_uint(value, camerasrc->type);
+		break;
+	case ARG_BUS_FORMAT:
+		g_value_set_uint(value, camerasrc->bus_f);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
